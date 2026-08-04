@@ -10,6 +10,7 @@ struct SidebarView: View {
     @Binding var selection: JournalEntryRecord?
     let vaultURL: URL
     let sortMode: EntrySortMode
+    let searchText: String
 
     @Environment(\.modelContext) private var modelContext
 
@@ -18,14 +19,15 @@ struct SidebarView: View {
     @State private var iconPickerEntry: JournalEntryRecord?
     @State private var entryPendingDeletion: JournalEntryRecord?
 
-    /// Custom init so the within-month sort descriptor can vary with
-    /// `sortMode` — SwiftData re-evaluates the fetch whenever this view is
-    /// reconstructed with a new value, per Apple's documented dynamic-query
-    /// pattern for @Query.
-    init(selection: Binding<JournalEntryRecord?>, vaultURL: URL, sortMode: EntrySortMode) {
+    /// Custom init so the within-month sort descriptor and search filter can
+    /// vary with `sortMode`/`searchText` — SwiftData re-evaluates the fetch
+    /// whenever this view is reconstructed with new values, per Apple's
+    /// documented dynamic-query pattern for @Query.
+    init(selection: Binding<JournalEntryRecord?>, vaultURL: URL, sortMode: EntrySortMode, searchText: String) {
         self._selection = selection
         self.vaultURL = vaultURL
         self.sortMode = sortMode
+        self.searchText = searchText
 
         let secondarySort: SortDescriptor<JournalEntryRecord>
         switch sortMode {
@@ -37,13 +39,32 @@ struct SidebarView: View {
             secondarySort = SortDescriptor(\JournalEntryRecord.modifiedAt)
         }
 
-        _entries = Query(
-            sort: [SortDescriptor(\JournalEntryRecord.monthKey, order: .reverse), secondarySort],
-            sectionBy: \.monthKey
-        )
+        let sortDescriptors = [SortDescriptor(\JournalEntryRecord.monthKey, order: .reverse), secondarySort]
+
+        if searchText.isEmpty {
+            _entries = Query(sort: sortDescriptors, sectionBy: \.monthKey)
+        } else {
+            let predicate = #Predicate<JournalEntryRecord> { entry in
+                entry.title.localizedStandardContains(searchText) || entry.searchableBody.localizedStandardContains(searchText)
+            }
+            _entries = Query(filter: predicate, sort: sortDescriptors, sectionBy: \.monthKey)
+        }
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            Text("Nibora")
+                .font(.system(size: 24, weight: .bold))
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            list
+        }
+    }
+
+    private var list: some View {
         List(selection: $selection) {
             ForEach(_entries.sections) { section in
                 Section(monthTitle(for: section.id)) {
