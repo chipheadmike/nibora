@@ -12,6 +12,8 @@ import SwiftData
 struct NiboraApp: App {
     @State private var vaultManager = VaultManager()
     @State private var themeManager = ThemeManager()
+    @State private var sortPreferences = EntrySortPreferences()
+    @State private var hotkeyPreferences = TimestampHotkeyPreferences()
 
     let sharedModelContainer: ModelContainer = {
         do {
@@ -26,6 +28,8 @@ struct NiboraApp: App {
             ContentView()
                 .environment(vaultManager)
                 .environment(themeManager)
+                .environment(sortPreferences)
+                .environment(hotkeyPreferences)
         }
         .modelContainer(sharedModelContainer)
 
@@ -33,6 +37,8 @@ struct NiboraApp: App {
             SettingsView()
                 .environment(vaultManager)
                 .environment(themeManager)
+                .environment(sortPreferences)
+                .environment(hotkeyPreferences)
         }
         .modelContainer(sharedModelContainer)
     }

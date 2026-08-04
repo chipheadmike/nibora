@@ -82,6 +82,7 @@ final class EntryIndexer {
             existing.modifiedAt = frontmatter.modifiedAt
             existing.excerpt = excerpt
             existing.fileModificationDate = modificationDate
+            existing.searchableBody = parsed.body
         } else {
             let record = JournalEntryRecord(
                 id: frontmatter.id,
@@ -94,7 +95,8 @@ final class EntryIndexer {
                 modifiedAt: frontmatter.modifiedAt,
                 relativePath: relativePath,
                 excerpt: excerpt,
-                fileModificationDate: modificationDate
+                fileModificationDate: modificationDate,
+                searchableBody: parsed.body
             )
             modelContext.insert(record)
         }

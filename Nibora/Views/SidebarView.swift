@@ -9,22 +9,62 @@ import SwiftData
 struct SidebarView: View {
     @Binding var selection: JournalEntryRecord?
     let vaultURL: URL
+    let sortMode: EntrySortMode
+    let searchText: String
 
     @Environment(\.modelContext) private var modelContext
 
-    @Query(
-        sort: [
-            SortDescriptor(\JournalEntryRecord.monthKey, order: .reverse),
-            SortDescriptor(\JournalEntryRecord.sortOrder),
-        ],
-        sectionBy: \.monthKey
-    )
-    private var entries: [JournalEntryRecord]
+    @Query private var entries: [JournalEntryRecord]
 
     @State private var iconPickerEntry: JournalEntryRecord?
     @State private var entryPendingDeletion: JournalEntryRecord?
 
+    /// Custom init so the within-month sort descriptor and search filter can
+    /// vary with `sortMode`/`searchText` — SwiftData re-evaluates the fetch
+    /// whenever this view is reconstructed with new values, per Apple's
+    /// documented dynamic-query pattern for @Query.
+    init(selection: Binding<JournalEntryRecord?>, vaultURL: URL, sortMode: EntrySortMode, searchText: String) {
+        self._selection = selection
+        self.vaultURL = vaultURL
+        self.sortMode = sortMode
+        self.searchText = searchText
+
+        let secondarySort: SortDescriptor<JournalEntryRecord>
+        switch sortMode {
+        case .manual:
+            secondarySort = SortDescriptor(\JournalEntryRecord.sortOrder)
+        case .createdDate:
+            secondarySort = SortDescriptor(\JournalEntryRecord.createdAt)
+        case .modifiedDate:
+            secondarySort = SortDescriptor(\JournalEntryRecord.modifiedAt)
+        }
+
+        let sortDescriptors = [SortDescriptor(\JournalEntryRecord.monthKey, order: .reverse), secondarySort]
+
+        if searchText.isEmpty {
+            _entries = Query(sort: sortDescriptors, sectionBy: \.monthKey)
+        } else {
+            let predicate = #Predicate<JournalEntryRecord> { entry in
+                entry.title.localizedStandardContains(searchText) || entry.searchableBody.localizedStandardContains(searchText)
+            }
+            _entries = Query(filter: predicate, sort: sortDescriptors, sectionBy: \.monthKey)
+        }
+    }
+
     var body: some View {
+        VStack(spacing: 0) {
+            Text("Nibora")
+                .font(.system(size: 24, weight: .bold))
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            list
+        }
+    }
+
+    private var list: some View {
         List(selection: $selection) {
             ForEach(_entries.sections) { section in
                 Section(monthTitle(for: section.id)) {
@@ -35,15 +75,17 @@ struct SidebarView: View {
                                 Button("Choose Icon…") {
                                     iconPickerEntry = entry
                                 }
-                                Divider()
-                                Button("Move Up") {
-                                    moveEntry(entry, direction: .up)
+                                if sortMode == .manual {
+                                    Divider()
+                                    Button("Move Up") {
+                                        moveEntry(entry, direction: .up)
+                                    }
+                                    .disabled(!canMove(entry, direction: .up))
+                                    Button("Move Down") {
+                                        moveEntry(entry, direction: .down)
+                                    }
+                                    .disabled(!canMove(entry, direction: .down))
                                 }
-                                .disabled(!canMove(entry, direction: .up))
-                                Button("Move Down") {
-                                    moveEntry(entry, direction: .down)
-                                }
-                                .disabled(!canMove(entry, direction: .down))
                                 Divider()
                                 Button("Delete…", role: .destructive) {
                                     entryPendingDeletion = entry

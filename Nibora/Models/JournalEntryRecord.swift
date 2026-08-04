@@ -21,6 +21,11 @@ final class JournalEntryRecord {
     var relativePath: String
     var excerpt: String
     var fileModificationDate: Date
+    /// Full body text, cached solely so search can query it via SwiftData's
+    /// predicate/SQLite path instead of scanning every file on disk per
+    /// keystroke. Never used as a source for editing or display — the
+    /// editor always reads the file fresh, same as before.
+    var searchableBody: String = ""
 
     init(
         id: UUID,
@@ -33,7 +38,8 @@ final class JournalEntryRecord {
         modifiedAt: Date,
         relativePath: String,
         excerpt: String,
-        fileModificationDate: Date
+        fileModificationDate: Date,
+        searchableBody: String = ""
     ) {
         self.id = id
         self.title = title
@@ -46,5 +52,6 @@ final class JournalEntryRecord {
         self.relativePath = relativePath
         self.excerpt = excerpt
         self.fileModificationDate = fileModificationDate
+        self.searchableBody = searchableBody
     }
 }
