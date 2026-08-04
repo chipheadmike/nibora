@@ -1,0 +1,549 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 110;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		FDD3678030220054001904A1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FDD3676A30220052001904A1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FDD3677130220052001904A1;
+			remoteInfo = Nibora;
+		};
+		FDD3678A30220054001904A1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FDD3676A30220052001904A1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FDD3677130220052001904A1;
+			remoteInfo = Nibora;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		FDD3677230220052001904A1 /* Nibora.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Nibora.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FDD3677F30220054001904A1 /* NiboraTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NiboraTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		FDD3678930220054001904A1 /* NiboraUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NiboraUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		FDD3677430220052001904A1 /* Nibora */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Nibora;
+			sourceTree = "<group>";
+		};
+		FDD3678230220054001904A1 /* NiboraTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = NiboraTests;
+			sourceTree = "<group>";
+		};
+		FDD3678C30220054001904A1 /* NiboraUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = NiboraUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		FDD3676F30220052001904A1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		FDD3677C30220054001904A1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		FDD3678630220054001904A1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		FDD3676930220052001904A1 = {
+			isa = PBXGroup;
+			children = (
+				FDD3677430220052001904A1 /* Nibora */,
+				FDD3678230220054001904A1 /* NiboraTests */,
+				FDD3678C30220054001904A1 /* NiboraUITests */,
+				FDD3677330220052001904A1 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		FDD3677330220052001904A1 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				FDD3677230220052001904A1 /* Nibora.app */,
+				FDD3677F30220054001904A1 /* NiboraTests.xctest */,
+				FDD3678930220054001904A1 /* NiboraUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		FDD3677130220052001904A1 /* Nibora */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FDD3679130220054001904A1 /* Build configuration list for PBXNativeTarget "Nibora" */;
+			buildPhases = (
+				FDD3676E30220052001904A1 /* Sources */,
+				FDD3676F30220052001904A1 /* Frameworks */,
+				FDD3677030220052001904A1 /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				FDD3677430220052001904A1 /* Nibora */,
+			);
+			name = Nibora;
+			productName = Nibora;
+			productReference = FDD3677230220052001904A1 /* Nibora.app */;
+			productType = "com.apple.product-type.application";
+		};
+		FDD3677E30220054001904A1 /* NiboraTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FDD3679430220054001904A1 /* Build configuration list for PBXNativeTarget "NiboraTests" */;
+			buildPhases = (
+				FDD3677B30220054001904A1 /* Sources */,
+				FDD3677C30220054001904A1 /* Frameworks */,
+				FDD3677D30220054001904A1 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				FDD3678130220054001904A1 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				FDD3678230220054001904A1 /* NiboraTests */,
+			);
+			name = NiboraTests;
+			productName = NiboraTests;
+			productReference = FDD3677F30220054001904A1 /* NiboraTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		FDD3678830220054001904A1 /* NiboraUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FDD3679730220054001904A1 /* Build configuration list for PBXNativeTarget "NiboraUITests" */;
+			buildPhases = (
+				FDD3678530220054001904A1 /* Sources */,
+				FDD3678630220054001904A1 /* Frameworks */,
+				FDD3678730220054001904A1 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				FDD3678B30220054001904A1 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				FDD3678C30220054001904A1 /* NiboraUITests */,
+			);
+			name = NiboraUITests;
+			productName = NiboraUITests;
+			productReference = FDD3678930220054001904A1 /* NiboraUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		FDD3676A30220052001904A1 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					FDD3677130220052001904A1 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					FDD3677E30220054001904A1 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = FDD3677130220052001904A1;
+					};
+					FDD3678830220054001904A1 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = FDD3677130220052001904A1;
+					};
+				};
+			};
+			buildConfigurationList = FDD3676D30220052001904A1 /* Build configuration list for PBXProject "Nibora" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = FDD3676930220052001904A1;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = FDD3677330220052001904A1 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				FDD3677130220052001904A1 /* Nibora */,
+				FDD3677E30220054001904A1 /* NiboraTests */,
+				FDD3678830220054001904A1 /* NiboraUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		FDD3677030220052001904A1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		FDD3677D30220054001904A1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		FDD3678730220054001904A1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		FDD3676E30220052001904A1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		FDD3677B30220054001904A1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		FDD3678530220054001904A1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		FDD3678130220054001904A1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FDD3677130220052001904A1 /* Nibora */;
+			targetProxy = FDD3678030220054001904A1 /* PBXContainerItemProxy */;
+		};
+		FDD3678B30220054001904A1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FDD3677130220052001904A1 /* Nibora */;
+			targetProxy = FDD3678A30220054001904A1 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		FDD3678F30220054001904A1 /* Debug configuration for PBXProject "Nibora" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 5TE942STS9;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		FDD3679030220054001904A1 /* Release configuration for PBXProject "Nibora" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 5TE942STS9;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		FDD3679230220054001904A1 /* Debug configuration for PBXNativeTarget "Nibora" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5TE942STS9;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.chataeubacon.app.Nibora;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		FDD3679330220054001904A1 /* Release configuration for PBXNativeTarget "Nibora" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5TE942STS9;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.chataeubacon.app.Nibora;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		FDD3679530220054001904A1 /* Debug configuration for PBXNativeTarget "NiboraTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5TE942STS9;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.chataeubacon.app.NiboraTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Nibora.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Nibora";
+			};
+			name = Debug;
+		};
+		FDD3679630220054001904A1 /* Release configuration for PBXNativeTarget "NiboraTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5TE942STS9;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.chataeubacon.app.NiboraTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Nibora.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Nibora";
+			};
+			name = Release;
+		};
+		FDD3679830220054001904A1 /* Debug configuration for PBXNativeTarget "NiboraUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5TE942STS9;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.chataeubacon.app.NiboraUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = Nibora;
+			};
+			name = Debug;
+		};
+		FDD3679930220054001904A1 /* Release configuration for PBXNativeTarget "NiboraUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5TE942STS9;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.chataeubacon.app.NiboraUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = Nibora;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		FDD3676D30220052001904A1 /* Build configuration list for PBXProject "Nibora" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FDD3678F30220054001904A1 /* Debug configuration for PBXProject "Nibora" */,
+				FDD3679030220054001904A1 /* Release configuration for PBXProject "Nibora" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		FDD3679130220054001904A1 /* Build configuration list for PBXNativeTarget "Nibora" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FDD3679230220054001904A1 /* Debug configuration for PBXNativeTarget "Nibora" */,
+				FDD3679330220054001904A1 /* Release configuration for PBXNativeTarget "Nibora" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		FDD3679430220054001904A1 /* Build configuration list for PBXNativeTarget "NiboraTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FDD3679530220054001904A1 /* Debug configuration for PBXNativeTarget "NiboraTests" */,
+				FDD3679630220054001904A1 /* Release configuration for PBXNativeTarget "NiboraTests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		FDD3679730220054001904A1 /* Build configuration list for PBXNativeTarget "NiboraUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FDD3679830220054001904A1 /* Debug configuration for PBXNativeTarget "NiboraUITests" */,
+				FDD3679930220054001904A1 /* Release configuration for PBXNativeTarget "NiboraUITests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = FDD3676A30220052001904A1 /* Project object */;
+	validationLevel = 1;
+}
