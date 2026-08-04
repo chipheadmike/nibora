@@ -9,20 +9,39 @@ import SwiftData
 struct SidebarView: View {
     @Binding var selection: JournalEntryRecord?
     let vaultURL: URL
+    let sortMode: EntrySortMode
 
     @Environment(\.modelContext) private var modelContext
 
-    @Query(
-        sort: [
-            SortDescriptor(\JournalEntryRecord.monthKey, order: .reverse),
-            SortDescriptor(\JournalEntryRecord.sortOrder),
-        ],
-        sectionBy: \.monthKey
-    )
-    private var entries: [JournalEntryRecord]
+    @Query private var entries: [JournalEntryRecord]
 
     @State private var iconPickerEntry: JournalEntryRecord?
     @State private var entryPendingDeletion: JournalEntryRecord?
+
+    /// Custom init so the within-month sort descriptor can vary with
+    /// `sortMode` — SwiftData re-evaluates the fetch whenever this view is
+    /// reconstructed with a new value, per Apple's documented dynamic-query
+    /// pattern for @Query.
+    init(selection: Binding<JournalEntryRecord?>, vaultURL: URL, sortMode: EntrySortMode) {
+        self._selection = selection
+        self.vaultURL = vaultURL
+        self.sortMode = sortMode
+
+        let secondarySort: SortDescriptor<JournalEntryRecord>
+        switch sortMode {
+        case .manual:
+            secondarySort = SortDescriptor(\JournalEntryRecord.sortOrder)
+        case .createdDate:
+            secondarySort = SortDescriptor(\JournalEntryRecord.createdAt)
+        case .modifiedDate:
+            secondarySort = SortDescriptor(\JournalEntryRecord.modifiedAt)
+        }
+
+        _entries = Query(
+            sort: [SortDescriptor(\JournalEntryRecord.monthKey, order: .reverse), secondarySort],
+            sectionBy: \.monthKey
+        )
+    }
 
     var body: some View {
         List(selection: $selection) {
@@ -35,15 +54,17 @@ struct SidebarView: View {
                                 Button("Choose Icon…") {
                                     iconPickerEntry = entry
                                 }
-                                Divider()
-                                Button("Move Up") {
-                                    moveEntry(entry, direction: .up)
+                                if sortMode == .manual {
+                                    Divider()
+                                    Button("Move Up") {
+                                        moveEntry(entry, direction: .up)
+                                    }
+                                    .disabled(!canMove(entry, direction: .up))
+                                    Button("Move Down") {
+                                        moveEntry(entry, direction: .down)
+                                    }
+                                    .disabled(!canMove(entry, direction: .down))
                                 }
-                                .disabled(!canMove(entry, direction: .up))
-                                Button("Move Down") {
-                                    moveEntry(entry, direction: .down)
-                                }
-                                .disabled(!canMove(entry, direction: .down))
                                 Divider()
                                 Button("Delete…", role: .destructive) {
                                     entryPendingDeletion = entry

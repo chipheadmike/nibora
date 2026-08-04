@@ -10,13 +10,14 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(VaultManager.self) private var vaultManager
+    @Environment(EntrySortPreferences.self) private var sortPreferences
     @Environment(\.modelContext) private var modelContext
     @State private var selection: JournalEntryRecord?
 
     var body: some View {
         if let vaultURL = vaultManager.vaultURL {
             NavigationSplitView {
-                SidebarView(selection: $selection, vaultURL: vaultURL)
+                SidebarView(selection: $selection, vaultURL: vaultURL, sortMode: sortPreferences.mode)
                     .navigationSplitViewColumnWidth(min: 220, ideal: 260)
                     .toolbar {
                         ToolbarItem {
@@ -63,5 +64,6 @@ struct ContentView: View {
     ContentView()
         .environment(VaultManager())
         .environment(ThemeManager())
+        .environment(EntrySortPreferences())
         .modelContainer(for: JournalEntryRecord.self, inMemory: true)
 }

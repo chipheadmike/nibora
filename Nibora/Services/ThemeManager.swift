@@ -7,8 +7,9 @@ import SwiftUI
 import AppKit
 
 /// User-customizable text colors: one for body text, one per markdown
-/// heading level (# through ######). Purely a display concern — the saved
-/// markdown file never encodes color, only the on-screen rendering does.
+/// heading level (# through ######), and one each for bold/italic spans.
+/// Purely a display concern — the saved markdown file never encodes color,
+/// only the on-screen rendering does.
 @Observable
 final class ThemeManager {
     var bodyColor: Color { didSet { persist(bodyColor, forKey: Keys.body) } }
@@ -18,6 +19,8 @@ final class ThemeManager {
     var h4Color: Color { didSet { persist(h4Color, forKey: Keys.h4) } }
     var h5Color: Color { didSet { persist(h5Color, forKey: Keys.h5) } }
     var h6Color: Color { didSet { persist(h6Color, forKey: Keys.h6) } }
+    var boldColor: Color { didSet { persist(boldColor, forKey: Keys.bold) } }
+    var italicColor: Color { didSet { persist(italicColor, forKey: Keys.italic) } }
 
     private enum Keys {
         static let body = "theme.bodyColor"
@@ -27,6 +30,8 @@ final class ThemeManager {
         static let h4 = "theme.h4Color"
         static let h5 = "theme.h5Color"
         static let h6 = "theme.h6Color"
+        static let bold = "theme.boldColor"
+        static let italic = "theme.italicColor"
     }
 
     private static let defaultBody = Color.primary
@@ -36,6 +41,8 @@ final class ThemeManager {
     private static let defaultH4 = Color(red: 0.32, green: 0.62, blue: 0.42)
     private static let defaultH5 = Color(red: 0.28, green: 0.52, blue: 0.78)
     private static let defaultH6 = Color(red: 0.52, green: 0.42, blue: 0.78)
+    private static let defaultBold = Color.primary
+    private static let defaultItalic = Color.primary
 
     init() {
         bodyColor = Self.load(Keys.body) ?? Self.defaultBody
@@ -45,6 +52,8 @@ final class ThemeManager {
         h4Color = Self.load(Keys.h4) ?? Self.defaultH4
         h5Color = Self.load(Keys.h5) ?? Self.defaultH5
         h6Color = Self.load(Keys.h6) ?? Self.defaultH6
+        boldColor = Self.load(Keys.bold) ?? Self.defaultBold
+        italicColor = Self.load(Keys.italic) ?? Self.defaultItalic
     }
 
     func color(forHeadingLevel level: Int) -> Color {
@@ -66,6 +75,8 @@ final class ThemeManager {
         h4Color = Self.defaultH4
         h5Color = Self.defaultH5
         h6Color = Self.defaultH6
+        boldColor = Self.defaultBold
+        italicColor = Self.defaultItalic
     }
 
     private static func load(_ key: String) -> Color? {
