@@ -6,19 +6,62 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct ContentView: View {
+    @Environment(VaultManager.self) private var vaultManager
+    @Environment(\.modelContext) private var modelContext
+    @State private var selection: JournalEntryRecord?
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        if let vaultURL = vaultManager.vaultURL {
+            NavigationSplitView {
+                SidebarView(selection: $selection, vaultURL: vaultURL)
+                    .navigationSplitViewColumnWidth(min: 220, ideal: 260)
+                    .toolbar {
+                        ToolbarItem {
+                            Button("New Entry", systemImage: "square.and.pencil") {
+                                createEntry(in: vaultURL)
+                            }
+                        }
+                        ToolbarItem {
+                            Button("Rescan Vault", systemImage: "arrow.clockwise") {
+                                EntryIndexer(modelContext: modelContext).rescanFullVault(at: vaultURL)
+                            }
+                        }
+                    }
+            } detail: {
+                if let selection {
+                    EntryEditorView(entry: selection, vaultURL: vaultURL)
+                } else {
+                    ContentUnavailableView("No Entry Selected", systemImage: "doc.text")
+                }
+            }
+            .task(id: vaultURL) {
+                EntryIndexer(modelContext: modelContext).rescanFullVault(at: vaultURL)
+            }
+            .onChange(of: vaultURL) { selection = nil }
+        } else {
+            VaultPickerView()
         }
-        .padding()
+    }
+
+    private func createEntry(in vaultURL: URL) {
+        guard let relativePath = try? EntryFileWriter.createEntry(date: Date(), title: "", in: vaultURL) else { return }
+        let fileURL = vaultURL.appendingPathComponent(relativePath)
+        let indexer = EntryIndexer(modelContext: modelContext)
+        indexer.reindexSingleFile(at: fileURL, vaultURL: vaultURL)
+
+        let descriptor = FetchDescriptor<JournalEntryRecord>(
+            predicate: #Predicate { $0.relativePath == relativePath }
+        )
+        selection = try? modelContext.fetch(descriptor).first
     }
 }
 
 #Preview {
     ContentView()
+        .environment(VaultManager())
+        .environment(ThemeManager())
+        .modelContainer(for: JournalEntryRecord.self, inMemory: true)
 }
