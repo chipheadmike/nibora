@@ -10,13 +10,23 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(VaultManager.self) private var vaultManager
+    @Environment(EntrySortPreferences.self) private var sortPreferences
     @Environment(\.modelContext) private var modelContext
     @State private var selection: JournalEntryRecord?
+    @State private var searchText = ""
 
     var body: some View {
+        Group {
+            content
+        }
+        .background(WindowAccessor(autosaveName: "MainWindow", hidesTitle: true))
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if let vaultURL = vaultManager.vaultURL {
             NavigationSplitView {
-                SidebarView(selection: $selection, vaultURL: vaultURL)
+                SidebarView(selection: $selection, vaultURL: vaultURL, sortMode: sortPreferences.mode, searchText: searchText)
                     .navigationSplitViewColumnWidth(min: 220, ideal: 260)
                     .toolbar {
                         ToolbarItem {
@@ -37,6 +47,7 @@ struct ContentView: View {
                     ContentUnavailableView("No Entry Selected", systemImage: "doc.text")
                 }
             }
+            .searchable(text: $searchText, placement: .sidebar, prompt: "Search entries")
             .task(id: vaultURL) {
                 EntryIndexer(modelContext: modelContext).rescanFullVault(at: vaultURL)
             }
@@ -63,5 +74,6 @@ struct ContentView: View {
     ContentView()
         .environment(VaultManager())
         .environment(ThemeManager())
+        .environment(EntrySortPreferences())
         .modelContainer(for: JournalEntryRecord.self, inMemory: true)
 }

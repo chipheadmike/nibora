@@ -10,12 +10,15 @@ import AppKit
 struct SettingsView: View {
     @Environment(VaultManager.self) private var vaultManager
     @Environment(ThemeManager.self) private var themeManager
+    @Environment(EntrySortPreferences.self) private var sortPreferences
+    @Environment(TimestampHotkeyPreferences.self) private var hotkeyPreferences
     @Environment(\.modelContext) private var modelContext
 
     @State private var importResultMessage: String?
 
     var body: some View {
         @Bindable var themeManager = themeManager
+        @Bindable var sortPreferences = sortPreferences
 
         Form {
             Section("Vault") {
@@ -28,6 +31,24 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Timestamp Hotkey") {
+                ShortcutRecorderView(preferences: hotkeyPreferences)
+                Text("While writing an entry, press this to insert the current 24-hour time (e.g. \"1350 - \") at the cursor.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Sorting") {
+                Picker("Sort entries within a month by", selection: $sortPreferences.mode) {
+                    ForEach(EntrySortMode.allCases) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                Text("Manual lets you drag/reorder entries yourself via the sidebar's context menu. The date modes ignore that order and always sort live.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Appearance") {
                 ColorPicker("Body Text", selection: $themeManager.bodyColor)
                 ColorPicker("# Heading 1", selection: $themeManager.h1Color)
@@ -36,6 +57,8 @@ struct SettingsView: View {
                 ColorPicker("#### Heading 4", selection: $themeManager.h4Color)
                 ColorPicker("##### Heading 5", selection: $themeManager.h5Color)
                 ColorPicker("###### Heading 6", selection: $themeManager.h6Color)
+                ColorPicker("Bold", selection: $themeManager.boldColor)
+                ColorPicker("Italic", selection: $themeManager.italicColor)
                 Button("Reset to Defaults") {
                     themeManager.resetToDefaults()
                 }
@@ -89,5 +112,7 @@ struct SettingsView: View {
     SettingsView()
         .environment(VaultManager())
         .environment(ThemeManager())
+        .environment(EntrySortPreferences())
+        .environment(TimestampHotkeyPreferences())
         .modelContainer(for: JournalEntryRecord.self, inMemory: true)
 }
