@@ -19,10 +19,15 @@ struct SidebarView: View {
     @State private var iconPickerEntry: JournalEntryRecord?
     @State private var entryPendingDeletion: JournalEntryRecord?
 
-    /// Custom init so the within-month sort descriptor and search filter can
-    /// vary with `sortMode`/`searchText` — SwiftData re-evaluates the fetch
-    /// whenever this view is reconstructed with new values, per Apple's
-    /// documented dynamic-query pattern for @Query.
+    /// Custom init so the within-month sort descriptor can vary with
+    /// `sortMode` — SwiftData re-evaluates the fetch whenever this view is
+    /// reconstructed with a new value, per Apple's documented dynamic-query
+    /// pattern for @Query. Grouping into month sections happens manually in
+    /// `groupedEntries` rather than via Query's `sectionBy:` — this beta's
+    /// SDK updated mid-session and its `sectionBy` overload resolution
+    /// shifted under us (confirmed via a from-scratch build against the
+    /// same source), so it's not something to keep depending on. Search is
+    /// likewise a plain client-side filter, not a SwiftData predicate.
     init(selection: Binding<JournalEntryRecord?>, vaultURL: URL, sortMode: EntrySortMode, searchText: String) {
         self._selection = selection
         self.vaultURL = vaultURL
@@ -39,16 +44,7 @@ struct SidebarView: View {
             secondarySort = SortDescriptor(\JournalEntryRecord.modifiedAt)
         }
 
-        let sortDescriptors = [SortDescriptor(\JournalEntryRecord.monthKey, order: .reverse), secondarySort]
-
-        if searchText.isEmpty {
-            _entries = Query(sort: sortDescriptors, sectionBy: \.monthKey)
-        } else {
-            let predicate = #Predicate<JournalEntryRecord> { entry in
-                entry.title.localizedStandardContains(searchText) || entry.searchableBody.localizedStandardContains(searchText)
-            }
-            _entries = Query(filter: predicate, sort: sortDescriptors, sectionBy: \.monthKey)
-        }
+        _entries = Query(sort: [SortDescriptor(\JournalEntryRecord.monthKey, order: .reverse), secondarySort])
     }
 
     var body: some View {
@@ -64,33 +60,45 @@ struct SidebarView: View {
         }
     }
 
+    /// Manual month grouping, since SwiftData's sectionBy is where the beta
+    /// churn hit. `entries` is already sorted month-desc then by the active
+    /// sortMode, and Dictionary(grouping:) preserves that relative order
+    /// within each group, so no re-sorting is needed here.
+    private var groupedEntries: [(monthKey: String, entries: [JournalEntryRecord])] {
+        let groups = Dictionary(grouping: entries, by: \.monthKey)
+        return groups.keys.sorted(by: >).map { key in (key, groups[key] ?? []) }
+    }
+
     private var list: some View {
         List(selection: $selection) {
-            ForEach(_entries.sections) { section in
-                Section(monthTitle(for: section.id)) {
-                    ForEach(section, id: \.id) { entry in
-                        EntryRow(entry: entry)
-                            .tag(entry)
-                            .contextMenu {
-                                Button("Choose Icon…") {
-                                    iconPickerEntry = entry
-                                }
-                                if sortMode == .manual {
+            ForEach(groupedEntries, id: \.monthKey) { group in
+                let visibleEntries = matchingEntries(in: group.entries)
+                if !visibleEntries.isEmpty {
+                    Section(monthTitle(for: group.monthKey)) {
+                        ForEach(visibleEntries, id: \.id) { entry in
+                            EntryRow(entry: entry)
+                                .tag(entry)
+                                .contextMenu {
+                                    Button("Choose Icon…") {
+                                        iconPickerEntry = entry
+                                    }
+                                    if sortMode == .manual {
+                                        Divider()
+                                        Button("Move Up") {
+                                            moveEntry(entry, direction: .up)
+                                        }
+                                        .disabled(!canMove(entry, direction: .up))
+                                        Button("Move Down") {
+                                            moveEntry(entry, direction: .down)
+                                        }
+                                        .disabled(!canMove(entry, direction: .down))
+                                    }
                                     Divider()
-                                    Button("Move Up") {
-                                        moveEntry(entry, direction: .up)
+                                    Button("Delete…", role: .destructive) {
+                                        entryPendingDeletion = entry
                                     }
-                                    .disabled(!canMove(entry, direction: .up))
-                                    Button("Move Down") {
-                                        moveEntry(entry, direction: .down)
-                                    }
-                                    .disabled(!canMove(entry, direction: .down))
                                 }
-                                Divider()
-                                Button("Delete…", role: .destructive) {
-                                    entryPendingDeletion = entry
-                                }
-                            }
+                        }
                     }
                 }
             }
@@ -194,6 +202,13 @@ struct SidebarView: View {
     private func monthTitle(for monthKey: String) -> String {
         guard let date = Self.monthKeyFormatter.date(from: monthKey) else { return monthKey }
         return Self.displayFormatter.string(from: date)
+    }
+
+    private func matchingEntries(in section: some Sequence<JournalEntryRecord>) -> [JournalEntryRecord] {
+        guard !searchText.isEmpty else { return Array(section) }
+        return section.filter {
+            $0.title.localizedStandardContains(searchText) || $0.searchableBody.localizedStandardContains(searchText)
+        }
     }
 
     private static let monthKeyFormatter: DateFormatter = {

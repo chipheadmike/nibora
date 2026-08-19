@@ -8,17 +8,28 @@ import SwiftData
 import AppKit
 
 struct SettingsView: View {
-    @Environment(VaultManager.self) private var vaultManager
-    @Environment(ThemeManager.self) private var themeManager
-    @Environment(EntrySortPreferences.self) private var sortPreferences
-    @Environment(TimestampHotkeyPreferences.self) private var hotkeyPreferences
-    @Environment(\.modelContext) private var modelContext
+    var body: some View {
+        TabView {
+            GeneralSettingsTab()
+                .tabItem { Label("General", systemImage: "gearshape") }
+            EditorSettingsTab()
+                .tabItem { Label("Editor", systemImage: "textformat") }
+            AppearanceSettingsTab()
+                .tabItem { Label("Appearance", systemImage: "paintpalette") }
+            ImportSettingsTab()
+                .tabItem { Label("Import", systemImage: "square.and.arrow.down") }
+        }
+    }
+}
 
-    @State private var importResultMessage: String?
+private struct GeneralSettingsTab: View {
+    @Environment(VaultManager.self) private var vaultManager
+    @Environment(EntrySortPreferences.self) private var sortPreferences
+    @Environment(JournalTitlePreferences.self) private var journalTitlePreferences
 
     var body: some View {
-        @Bindable var themeManager = themeManager
         @Bindable var sortPreferences = sortPreferences
+        @Bindable var journalTitlePreferences = journalTitlePreferences
 
         Form {
             Section("Vault") {
@@ -31,9 +42,9 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Timestamp Hotkey") {
-                ShortcutRecorderView(preferences: hotkeyPreferences)
-                Text("While writing an entry, press this to insert the current 24-hour time (e.g. \"1350 - \") at the cursor.")
+            Section("Journal Title") {
+                TextField("e.g. Mike's Journal", text: $journalTitlePreferences.title)
+                Text("Shown in the window's title bar. Leave blank to hide it.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -48,8 +59,60 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+        .formStyle(.grouped)
+        .frame(width: 440)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
 
-            Section("Appearance") {
+private struct EditorSettingsTab: View {
+    @Environment(FontPreferences.self) private var fontPreferences
+    @Environment(TimestampHotkeyPreferences.self) private var hotkeyPreferences
+
+    private static let availableFontNames: [String] = {
+        [FontPreferences.systemMonospacedSentinel] + NSFontManager.shared.availableFontFamilies.sorted()
+    }()
+
+    var body: some View {
+        @Bindable var fontPreferences = fontPreferences
+
+        Form {
+            Section("Font") {
+                Picker("Editor Font", selection: $fontPreferences.fontName) {
+                    ForEach(Self.availableFontNames, id: \.self) { name in
+                        Text(name).tag(name)
+                    }
+                }
+                Stepper(value: $fontPreferences.fontSize, in: FontPreferences.sizeRange, step: 1) {
+                    LabeledContent("Size", value: "\(Int(fontPreferences.fontSize))pt")
+                }
+                Button("Reset to Defaults") {
+                    fontPreferences.resetToDefaults()
+                }
+            }
+
+            Section("Timestamp Hotkey") {
+                ShortcutRecorderView(preferences: hotkeyPreferences)
+                Text("While writing an entry, press this to insert the current 24-hour time (e.g. \"1350 - \") at the cursor.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 440)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+private struct AppearanceSettingsTab: View {
+    @Environment(ThemeManager.self) private var themeManager
+
+    var body: some View {
+        @Bindable var themeManager = themeManager
+
+        Form {
+            Section("Text Colors") {
                 ColorPicker("Body Text", selection: $themeManager.bodyColor)
                 ColorPicker("# Heading 1", selection: $themeManager.h1Color)
                 ColorPicker("## Heading 2", selection: $themeManager.h2Color)
@@ -59,11 +122,28 @@ struct SettingsView: View {
                 ColorPicker("###### Heading 6", selection: $themeManager.h6Color)
                 ColorPicker("Bold", selection: $themeManager.boldColor)
                 ColorPicker("Italic", selection: $themeManager.italicColor)
+            }
+
+            Section {
                 Button("Reset to Defaults") {
                     themeManager.resetToDefaults()
                 }
             }
+        }
+        .formStyle(.grouped)
+        .frame(width: 440)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
 
+private struct ImportSettingsTab: View {
+    @Environment(VaultManager.self) private var vaultManager
+    @Environment(\.modelContext) private var modelContext
+
+    @State private var importResultMessage: String?
+
+    var body: some View {
+        Form {
             Section("Import") {
                 Button("Import from Folder…") {
                     importFromFolder()
@@ -114,5 +194,7 @@ struct SettingsView: View {
         .environment(ThemeManager())
         .environment(EntrySortPreferences())
         .environment(TimestampHotkeyPreferences())
+        .environment(FontPreferences())
+        .environment(JournalTitlePreferences())
         .modelContainer(for: JournalEntryRecord.self, inMemory: true)
 }
