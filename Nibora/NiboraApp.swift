@@ -14,6 +14,7 @@ struct NiboraApp: App {
     @State private var themeManager = ThemeManager()
     @State private var sortPreferences = EntrySortPreferences()
     @State private var hotkeyPreferences = TimestampHotkeyPreferences()
+    @State private var fontPreferences = FontPreferences()
 
     let sharedModelContainer: ModelContainer = {
         do {
@@ -30,6 +31,7 @@ struct NiboraApp: App {
                 .environment(themeManager)
                 .environment(sortPreferences)
                 .environment(hotkeyPreferences)
+                .environment(fontPreferences)
         }
         .modelContainer(sharedModelContainer)
 
@@ -39,6 +41,7 @@ struct NiboraApp: App {
                 .environment(themeManager)
                 .environment(sortPreferences)
                 .environment(hotkeyPreferences)
+                .environment(fontPreferences)
         }
         .modelContainer(sharedModelContainer)
     }

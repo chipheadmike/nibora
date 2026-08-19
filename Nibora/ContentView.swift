@@ -75,5 +75,7 @@ struct ContentView: View {
         .environment(VaultManager())
         .environment(ThemeManager())
         .environment(EntrySortPreferences())
+        .environment(TimestampHotkeyPreferences())
+        .environment(FontPreferences())
         .modelContainer(for: JournalEntryRecord.self, inMemory: true)
 }

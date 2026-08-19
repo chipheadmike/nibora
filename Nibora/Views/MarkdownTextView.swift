@@ -20,17 +20,7 @@ struct MarkdownTextView: NSViewRepresentable {
     let saveImage: (NSImage, String?) -> String?
     let theme: ThemeManager
     let hotkeyPreferences: TimestampHotkeyPreferences
-
-    static let editorFont = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
-    static let boldFont = NSFont.monospacedSystemFont(ofSize: 13, weight: .bold)
-    static let italicFont: NSFont = {
-        let descriptor = editorFont.fontDescriptor.withSymbolicTraits(.italic)
-        return NSFont(descriptor: descriptor, size: editorFont.pointSize) ?? editorFont
-    }()
-    static let boldItalicFont: NSFont = {
-        let descriptor = editorFont.fontDescriptor.withSymbolicTraits([.bold, .italic])
-        return NSFont(descriptor: descriptor, size: editorFont.pointSize) ?? boldFont
-    }()
+    let fontPreferences: FontPreferences
 
     static let imageReferencePattern = try! NSRegularExpression(pattern: #"!\[[^\]]*\]\(([^)]+)\)"#)
     static let boldItalicAsteriskPattern = try! NSRegularExpression(pattern: #"\*\*\*([^*]+?)\*\*\*"#)
@@ -46,7 +36,7 @@ struct MarkdownTextView: NSViewRepresentable {
         textView.delegate = context.coordinator
         textView.isEditable = true
         textView.isRichText = false
-        textView.font = Self.editorFont
+        textView.font = EditorFontSet(fontName: fontPreferences.fontName, fontSize: fontPreferences.fontSize).regular
         textView.textColor = .textColor
         textView.textContainerInset = NSSize(width: 12, height: 12)
         textView.isAutomaticQuoteSubstitutionEnabled = false
@@ -72,7 +62,7 @@ struct MarkdownTextView: NSViewRepresentable {
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = false
 
-        Self.applyMarkdownStyling(in: textView, theme: theme)
+        Self.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences)
 
         return scrollView
     }
@@ -84,26 +74,28 @@ struct MarkdownTextView: NSViewRepresentable {
         if textView.string != text {
             textView.string = text
         }
-        Self.applyMarkdownStyling(in: textView, theme: theme)
+        Self.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences)
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, theme: theme)
+        Coordinator(text: $text, theme: theme, fontPreferences: fontPreferences)
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
         var theme: ThemeManager
+        var fontPreferences: FontPreferences
 
-        init(text: Binding<String>, theme: ThemeManager) {
+        init(text: Binding<String>, theme: ThemeManager, fontPreferences: FontPreferences) {
             self.text = text
             self.theme = theme
+            self.fontPreferences = fontPreferences
         }
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             text.wrappedValue = textView.string
-            MarkdownTextView.applyMarkdownStyling(in: textView, theme: theme)
+            MarkdownTextView.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences)
         }
 
         /// Intercepts Return via the modern text-input command path rather
@@ -150,23 +142,24 @@ struct MarkdownTextView: NSViewRepresentable {
     /// font traits to `**`/`__`/`*`/`_` spans — all via attribute-only edits,
     /// never touching the characters themselves, so cursor position and undo
     /// history are untouched.
-    static func applyMarkdownStyling(in textView: NSTextView, theme: ThemeManager) {
+    static func applyMarkdownStyling(in textView: NSTextView, theme: ThemeManager, fontPreferences: FontPreferences) {
         guard let textStorage = textView.textStorage else { return }
+        let fonts = EditorFontSet(fontName: fontPreferences.fontName, fontSize: fontPreferences.fontSize)
         let fullText = textStorage.string as NSString
         let fullRange = NSRange(location: 0, length: fullText.length)
         guard fullRange.length > 0 else { return }
 
         textStorage.beginEditing()
         textStorage.addAttribute(.foregroundColor, value: NSColor(theme.bodyColor), range: fullRange)
-        textStorage.addAttribute(.font, value: editorFont, range: fullRange)
+        textStorage.addAttribute(.font, value: fonts.regular, range: fullRange)
 
         fullText.enumerateSubstrings(in: fullRange, options: [.byLines]) { _, lineRange, _, _ in
             let line = fullText.substring(with: lineRange)
             if let level = headingLevel(of: line) {
                 textStorage.addAttribute(.foregroundColor, value: NSColor(theme.color(forHeadingLevel: level)), range: lineRange)
             }
-            applyBulletIndent(in: textStorage, line: line, lineRange: lineRange)
-            applyEmphasis(in: textStorage, line: line, lineRange: lineRange, theme: theme)
+            applyBulletIndent(in: textStorage, line: line, lineRange: lineRange, fonts: fonts)
+            applyEmphasis(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
         }
         textStorage.endEditing()
     }
@@ -177,22 +170,22 @@ struct MarkdownTextView: NSViewRepresentable {
     /// replaced with a real "•" glyph, since that would require an
     /// NSTextAttachment-style substitution, which turned out to be an
     /// unreliable pattern in this beta SDK (see the image-attachment work).
-    private static func applyBulletIndent(in textStorage: NSTextStorage, line: String, lineRange: NSRange) {
+    private static func applyBulletIndent(in textStorage: NSTextStorage, line: String, lineRange: NSRange, fonts: EditorFontSet) {
         guard let match = bulletListPattern.firstMatch(in: line, range: NSRange(location: 0, length: (line as NSString).length)) else {
             return
         }
 
-        let indentWidth = editorFont.pointSize * 2
+        let indentWidth = fonts.regular.pointSize * 2
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.firstLineHeadIndent = 0
         paragraphStyle.headIndent = indentWidth
         textStorage.addAttribute(.paragraphStyle, value: paragraphStyle, range: lineRange)
 
         let markerRange = NSRange(location: lineRange.location + match.range(at: 2).location, length: match.range(at: 2).length)
-        textStorage.addAttribute(.font, value: boldFont, range: markerRange)
+        textStorage.addAttribute(.font, value: fonts.bold, range: markerRange)
     }
 
-    private static func applyEmphasis(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager) {
+    private static func applyEmphasis(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager, fonts: EditorFontSet) {
         let nsLine = line as NSString
         let lineSearchRange = NSRange(location: 0, length: nsLine.length)
         var claimedRanges: [NSRange] = []
@@ -208,12 +201,12 @@ struct MarkdownTextView: NSViewRepresentable {
             }
         }
 
-        apply(boldItalicAsteriskPattern, font: boldItalicFont, color: theme.boldColor)
-        apply(boldItalicUnderscorePattern, font: boldItalicFont, color: theme.boldColor)
-        apply(boldAsteriskPattern, font: boldFont, color: theme.boldColor)
-        apply(boldUnderscorePattern, font: boldFont, color: theme.boldColor)
-        apply(italicAsteriskPattern, font: italicFont, color: theme.italicColor)
-        apply(italicUnderscorePattern, font: italicFont, color: theme.italicColor)
+        apply(boldItalicAsteriskPattern, font: fonts.boldItalic, color: theme.boldColor)
+        apply(boldItalicUnderscorePattern, font: fonts.boldItalic, color: theme.boldColor)
+        apply(boldAsteriskPattern, font: fonts.bold, color: theme.boldColor)
+        apply(boldUnderscorePattern, font: fonts.bold, color: theme.boldColor)
+        apply(italicAsteriskPattern, font: fonts.italic, color: theme.italicColor)
+        apply(italicUnderscorePattern, font: fonts.italic, color: theme.italicColor)
     }
 
     private static func headingLevel(of line: String) -> Int? {
@@ -352,5 +345,30 @@ final class DropHandlingTextView: NSTextView {
     private func isImageFile(_ url: URL) -> Bool {
         guard let type = UTType(filenameExtension: url.pathExtension) else { return false }
         return type.conforms(to: .image)
+    }
+}
+
+/// Resolves the editor's regular/bold/italic/bold-italic fonts from the
+/// user's chosen family + size. Falls back to the system monospaced font
+/// if the chosen family name doesn't resolve (e.g. deleted since picked).
+struct EditorFontSet {
+    let regular: NSFont
+    let bold: NSFont
+    let italic: NSFont
+    let boldItalic: NSFont
+
+    init(fontName: String, fontSize: CGFloat) {
+        let isSystemMonospaced = fontName == FontPreferences.systemMonospacedSentinel
+        let base = isSystemMonospaced
+            ? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+            : (NSFont(name: fontName, size: fontSize) ?? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular))
+        regular = base
+
+        bold = isSystemMonospaced
+            ? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .bold)
+            : (NSFont(descriptor: base.fontDescriptor.withSymbolicTraits(.bold), size: fontSize) ?? base)
+
+        italic = NSFont(descriptor: base.fontDescriptor.withSymbolicTraits(.italic), size: fontSize) ?? base
+        boldItalic = NSFont(descriptor: base.fontDescriptor.withSymbolicTraits([.bold, .italic]), size: fontSize) ?? bold
     }
 }
