@@ -25,9 +25,11 @@ struct SettingsView: View {
 private struct GeneralSettingsTab: View {
     @Environment(VaultManager.self) private var vaultManager
     @Environment(EntrySortPreferences.self) private var sortPreferences
+    @Environment(JournalTitlePreferences.self) private var journalTitlePreferences
 
     var body: some View {
         @Bindable var sortPreferences = sortPreferences
+        @Bindable var journalTitlePreferences = journalTitlePreferences
 
         Form {
             Section("Vault") {
@@ -38,6 +40,13 @@ private struct GeneralSettingsTab: View {
                 Button("Change Vault…") {
                     vaultManager.changeVault()
                 }
+            }
+
+            Section("Journal Title") {
+                TextField("e.g. Mike's Journal", text: $journalTitlePreferences.title)
+                Text("Shown in the window's title bar. Leave blank to hide it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Sorting") {
@@ -186,5 +195,6 @@ private struct ImportSettingsTab: View {
         .environment(EntrySortPreferences())
         .environment(TimestampHotkeyPreferences())
         .environment(FontPreferences())
+        .environment(JournalTitlePreferences())
         .modelContainer(for: JournalEntryRecord.self, inMemory: true)
 }
