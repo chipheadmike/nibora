@@ -11,6 +11,7 @@ import SwiftData
 struct ContentView: View {
     @Environment(VaultManager.self) private var vaultManager
     @Environment(EntrySortPreferences.self) private var sortPreferences
+    @Environment(JournalTitlePreferences.self) private var journalTitlePreferences
     @Environment(\.modelContext) private var modelContext
     @State private var selection: JournalEntryRecord?
     @State private var searchText = ""
@@ -19,7 +20,7 @@ struct ContentView: View {
         Group {
             content
         }
-        .background(WindowAccessor(autosaveName: "MainWindow", hidesTitle: true))
+        .background(WindowAccessor(autosaveName: "MainWindow", customTitle: journalTitlePreferences.title))
     }
 
     @ViewBuilder
@@ -75,5 +76,8 @@ struct ContentView: View {
         .environment(VaultManager())
         .environment(ThemeManager())
         .environment(EntrySortPreferences())
+        .environment(TimestampHotkeyPreferences())
+        .environment(FontPreferences())
+        .environment(JournalTitlePreferences())
         .modelContainer(for: JournalEntryRecord.self, inMemory: true)
 }

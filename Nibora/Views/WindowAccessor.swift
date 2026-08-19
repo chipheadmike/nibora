@@ -12,24 +12,28 @@ import AppKit
 /// position immediately and keeps persisting future changes automatically.
 struct WindowAccessor: NSViewRepresentable {
     let autosaveName: String
-    var hidesTitle: Bool = false
+    var customTitle: String = ""
 
     func makeNSView(context: Context) -> WindowAccessorView {
         let view = WindowAccessorView()
         view.autosaveName = autosaveName
-        view.hidesTitle = hidesTitle
+        view.customTitle = customTitle
         return view
     }
 
     func updateNSView(_ nsView: WindowAccessorView, context: Context) {
         nsView.autosaveName = autosaveName
-        nsView.hidesTitle = hidesTitle
+        nsView.customTitle = customTitle
+        nsView.applyTitle()
     }
 }
 
 final class WindowAccessorView: NSView {
     var autosaveName: String = ""
-    var hidesTitle: Bool = false
+    /// Empty means "no custom title" — the title bar stays hidden, matching
+    /// the app's default (Mail/Notes-style) look with the big sidebar title
+    /// instead. A non-empty value shows it as the real window title.
+    var customTitle: String = ""
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
@@ -37,8 +41,18 @@ final class WindowAccessorView: NSView {
         if !autosaveName.isEmpty {
             window.setFrameAutosaveName(autosaveName)
         }
-        if hidesTitle {
+        applyTitle()
+    }
+
+    /// Called from updateNSView too, so changing the title in Settings
+    /// while the main window is open takes effect immediately.
+    func applyTitle() {
+        guard let window else { return }
+        if customTitle.isEmpty {
             window.titleVisibility = .hidden
+        } else {
+            window.title = customTitle
+            window.titleVisibility = .visible
         }
     }
 }

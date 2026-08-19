@@ -14,6 +14,7 @@ struct EntryEditorView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(ThemeManager.self) private var themeManager
     @Environment(TimestampHotkeyPreferences.self) private var hotkeyPreferences
+    @Environment(FontPreferences.self) private var fontPreferences
 
     @State private var title: String = ""
     @State private var bodyText: String = ""
@@ -40,7 +41,8 @@ struct EntryEditorView: View {
                 baseDirectory: fileURL.deletingLastPathComponent(),
                 saveImage: saveDroppedImage,
                 theme: themeManager,
-                hotkeyPreferences: hotkeyPreferences
+                hotkeyPreferences: hotkeyPreferences,
+                fontPreferences: fontPreferences
             )
             .onChange(of: bodyText) { scheduleSave() }
 
