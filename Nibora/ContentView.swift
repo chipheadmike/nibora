@@ -16,6 +16,19 @@ struct ContentView: View {
     @State private var selection: JournalEntryRecord?
     @State private var searchText = ""
 
+    /// Live count of entries dated today, so the New Entry button can hide
+    /// itself the moment today's entry exists — journals are one-per-day.
+    @Query private var todaysEntries: [JournalEntryRecord]
+
+    init() {
+        let todayStart = Calendar.current.startOfDay(for: Date())
+        _todaysEntries = Query(filter: #Predicate<JournalEntryRecord> { $0.date == todayStart })
+    }
+
+    private var hasEntryForToday: Bool {
+        !todaysEntries.isEmpty
+    }
+
     var body: some View {
         Group {
             content
@@ -30,9 +43,11 @@ struct ContentView: View {
                 SidebarView(selection: $selection, vaultURL: vaultURL, sortMode: sortPreferences.mode, searchText: searchText)
                     .navigationSplitViewColumnWidth(min: 220, ideal: 260)
                     .toolbar {
-                        ToolbarItem {
-                            Button("New Entry", systemImage: "square.and.pencil") {
-                                createEntry(in: vaultURL)
+                        if !hasEntryForToday {
+                            ToolbarItem {
+                                Button("New Entry", systemImage: "square.and.pencil") {
+                                    createEntry(in: vaultURL)
+                                }
                             }
                         }
                         ToolbarItem {
@@ -59,7 +74,9 @@ struct ContentView: View {
     }
 
     private func createEntry(in vaultURL: URL) {
-        guard let relativePath = try? EntryFileWriter.createEntry(date: Date(), title: "", in: vaultURL) else { return }
+        let now = Date()
+        let title = Self.titleDateFormatter.string(from: now)
+        guard let relativePath = try? EntryFileWriter.createEntry(date: now, title: title, in: vaultURL) else { return }
         let fileURL = vaultURL.appendingPathComponent(relativePath)
         let indexer = EntryIndexer(modelContext: modelContext)
         indexer.reindexSingleFile(at: fileURL, vaultURL: vaultURL)
@@ -69,6 +86,14 @@ struct ContentView: View {
         )
         selection = try? modelContext.fetch(descriptor).first
     }
+
+    private static let titleDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM dd, yyyy"
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = TimeZone.current
+        return formatter
+    }()
 }
 
 #Preview {
