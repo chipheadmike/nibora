@@ -18,6 +18,8 @@ struct SettingsView: View {
                 .tabItem { Label("Appearance", systemImage: "paintpalette") }
             ImportSettingsTab()
                 .tabItem { Label("Import", systemImage: "square.and.arrow.down") }
+            PasswordSettingsTab()
+                .tabItem { Label("Password", systemImage: "lock") }
         }
     }
 }
@@ -188,6 +190,107 @@ private struct ImportSettingsTab: View {
     }
 }
 
+private struct PasswordSettingsTab: View {
+    @Environment(PasswordLockPreferences.self) private var preferences
+    @Environment(AppLockManager.self) private var lockManager
+
+    @State private var currentPassword = ""
+    @State private var newPassword = ""
+    @State private var confirmPassword = ""
+    @State private var statusMessage: String?
+    @State private var isError = false
+
+    var body: some View {
+        if lockManager.isLocked {
+            ContentUnavailableView(
+                "Unlock Nibora First",
+                systemImage: "lock.fill",
+                description: Text("Password settings are unavailable while the app is locked.")
+            )
+            .frame(width: 440, height: 300)
+        } else {
+            settingsForm
+        }
+    }
+
+    private var settingsForm: some View {
+        @Bindable var preferences = preferences
+
+        return Form {
+            Section("Password") {
+                if preferences.hasPassword {
+                    SecureField("Current Password", text: $currentPassword)
+                }
+                SecureField("New Password", text: $newPassword)
+                SecureField("Confirm New Password", text: $confirmPassword)
+
+                HStack {
+                    Button(preferences.hasPassword ? "Change Password" : "Set Password") {
+                        changePassword()
+                    }
+                    .disabled(newPassword.isEmpty)
+
+                    if preferences.hasPassword {
+                        Button("Remove Password", role: .destructive) {
+                            removePassword()
+                        }
+                    }
+                }
+
+                if let statusMessage {
+                    Text(statusMessage)
+                        .font(.caption)
+                        .foregroundStyle(isError ? .red : .secondary)
+                }
+            }
+
+            Section("Lock Behavior") {
+                Stepper(value: $preferences.lockAfterMinutes, in: PasswordLockPreferences.minutesRange, step: 1) {
+                    LabeledContent("Lock after", value: "\(preferences.lockAfterMinutes) min")
+                }
+                Toggle("Require password after minimizing", isOn: $preferences.lockOnMinimize)
+
+                Text("This is a privacy screen, not encryption — entries stay plain text on disk either way. If you forget your password, you can remove the lock via Keychain Access.app (search \"Nibora\").")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 440)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func changePassword() {
+        guard newPassword == confirmPassword else {
+            statusMessage = "Passwords don't match."
+            isError = true
+            return
+        }
+        if preferences.hasPassword {
+            guard preferences.verifyPassword(currentPassword) else {
+                statusMessage = "Current password is incorrect."
+                isError = true
+                return
+            }
+        }
+        preferences.setPassword(newPassword)
+        currentPassword = ""
+        newPassword = ""
+        confirmPassword = ""
+        statusMessage = "Password updated."
+        isError = false
+    }
+
+    private func removePassword() {
+        preferences.clearPassword()
+        currentPassword = ""
+        newPassword = ""
+        confirmPassword = ""
+        statusMessage = "Password removed."
+        isError = false
+    }
+}
+
 #Preview {
     SettingsView()
         .environment(VaultManager())
@@ -196,5 +299,7 @@ private struct ImportSettingsTab: View {
         .environment(TimestampHotkeyPreferences())
         .environment(FontPreferences())
         .environment(JournalTitlePreferences())
+        .environment(PasswordLockPreferences())
+        .environment(AppLockManager(preferences: PasswordLockPreferences()))
         .modelContainer(for: JournalEntryRecord.self, inMemory: true)
 }

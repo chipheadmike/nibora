@@ -12,6 +12,7 @@ struct ContentView: View {
     @Environment(VaultManager.self) private var vaultManager
     @Environment(EntrySortPreferences.self) private var sortPreferences
     @Environment(JournalTitlePreferences.self) private var journalTitlePreferences
+    @Environment(AppLockManager.self) private var appLockManager
     @Environment(\.modelContext) private var modelContext
     @State private var selection: JournalEntryRecord?
     @State private var searchText = ""
@@ -34,6 +35,11 @@ struct ContentView: View {
             content
         }
         .background(WindowAccessor(autosaveName: "MainWindow", customTitle: journalTitlePreferences.title))
+        .overlay {
+            if appLockManager.isLocked {
+                LockScreenView(lockManager: appLockManager)
+            }
+        }
     }
 
     @ViewBuilder
@@ -104,5 +110,6 @@ struct ContentView: View {
         .environment(TimestampHotkeyPreferences())
         .environment(FontPreferences())
         .environment(JournalTitlePreferences())
+        .environment(AppLockManager(preferences: PasswordLockPreferences()))
         .modelContainer(for: JournalEntryRecord.self, inMemory: true)
 }
