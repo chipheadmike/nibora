@@ -16,6 +16,8 @@ struct NiboraApp: App {
     @State private var hotkeyPreferences = TimestampHotkeyPreferences()
     @State private var fontPreferences = FontPreferences()
     @State private var journalTitlePreferences = JournalTitlePreferences()
+    @State private var passwordLockPreferences: PasswordLockPreferences
+    @State private var appLockManager: AppLockManager
 
     let sharedModelContainer: ModelContainer = {
         do {
@@ -24,6 +26,12 @@ struct NiboraApp: App {
             fatalError("Could not create ModelContainer: \(error)")
         }
     }()
+
+    init() {
+        let passwordPrefs = PasswordLockPreferences()
+        _passwordLockPreferences = State(initialValue: passwordPrefs)
+        _appLockManager = State(initialValue: AppLockManager(preferences: passwordPrefs))
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -34,6 +42,8 @@ struct NiboraApp: App {
                 .environment(hotkeyPreferences)
                 .environment(fontPreferences)
                 .environment(journalTitlePreferences)
+                .environment(passwordLockPreferences)
+                .environment(appLockManager)
         }
         .modelContainer(sharedModelContainer)
 
@@ -45,6 +55,8 @@ struct NiboraApp: App {
                 .environment(hotkeyPreferences)
                 .environment(fontPreferences)
                 .environment(journalTitlePreferences)
+                .environment(passwordLockPreferences)
+                .environment(appLockManager)
         }
         .modelContainer(sharedModelContainer)
     }
