@@ -20,9 +20,14 @@ struct EntryEditorView: View {
     @State private var bodyText: String = ""
     @State private var saveTask: Task<Void, Never>?
     @State private var isLoaded = false
+    @State private var isFocusModeEnabled = false
 
     private var fileURL: URL {
         vaultURL.appendingPathComponent(entry.relativePath)
+    }
+
+    private var wordCount: Int {
+        bodyText.split(whereSeparator: \.isWhitespace).count
     }
 
     var body: some View {
@@ -42,11 +47,22 @@ struct EntryEditorView: View {
                 saveImage: saveDroppedImage,
                 theme: themeManager,
                 hotkeyPreferences: hotkeyPreferences,
-                fontPreferences: fontPreferences
+                fontPreferences: fontPreferences,
+                isFocusModeEnabled: isFocusModeEnabled
             )
             .onChange(of: bodyText) { scheduleSave() }
 
             AttachmentsStripView(text: bodyText, baseDirectory: fileURL.deletingLastPathComponent())
+
+            Divider()
+            HStack {
+                Spacer()
+                Text("\(wordCount) words · \(bodyText.count) characters")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
         }
         .task(id: entry.id) {
             load()
@@ -54,6 +70,16 @@ struct EntryEditorView: View {
         .onDisappear {
             saveTask?.cancel()
             saveNow()
+        }
+        .toolbar {
+            ToolbarItem {
+                Button {
+                    isFocusModeEnabled.toggle()
+                } label: {
+                    Image(systemName: isFocusModeEnabled ? "eye.fill" : "eye")
+                }
+                .help(isFocusModeEnabled ? "Turn Off Focus Mode" : "Turn On Focus Mode")
+            }
         }
     }
 

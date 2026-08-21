@@ -19,7 +19,7 @@ struct SettingsView: View {
             ImportSettingsTab()
                 .tabItem { Label("Import", systemImage: "square.and.arrow.down") }
             PasswordSettingsTab()
-                .tabItem { Label("Password", systemImage: "lock") }
+                .tabItem { Label("Password", systemImage: "lock.fill") }
         }
     }
 }
@@ -72,17 +72,13 @@ private struct EditorSettingsTab: View {
     @Environment(FontPreferences.self) private var fontPreferences
     @Environment(TimestampHotkeyPreferences.self) private var hotkeyPreferences
 
-    private static let availableFontNames: [String] = {
-        [FontPreferences.systemMonospacedSentinel] + NSFontManager.shared.availableFontFamilies.sorted()
-    }()
-
     var body: some View {
         @Bindable var fontPreferences = fontPreferences
 
         Form {
             Section("Font") {
                 Picker("Editor Font", selection: $fontPreferences.fontName) {
-                    ForEach(Self.availableFontNames, id: \.self) { name in
+                    ForEach(FontPreferences.availableFontNames, id: \.self) { name in
                         Text(name).tag(name)
                     }
                 }
@@ -109,9 +105,11 @@ private struct EditorSettingsTab: View {
 
 private struct AppearanceSettingsTab: View {
     @Environment(ThemeManager.self) private var themeManager
+    @Environment(FontPreferences.self) private var fontPreferences
 
     var body: some View {
         @Bindable var themeManager = themeManager
+        @Bindable var fontPreferences = fontPreferences
 
         Form {
             Section("Text Colors") {
@@ -124,12 +122,34 @@ private struct AppearanceSettingsTab: View {
                 ColorPicker("###### Heading 6", selection: $themeManager.h6Color)
                 ColorPicker("Bold", selection: $themeManager.boldColor)
                 ColorPicker("Italic", selection: $themeManager.italicColor)
+                ColorPicker("Link", selection: $themeManager.linkColor)
+                ColorPicker("Strikethrough", selection: $themeManager.strikethroughColor)
+            }
+
+            Section("Highlight") {
+                ColorPicker("Highlight Background", selection: $themeManager.highlightColor)
+                Text("Applies to text wrapped in ==double equals==.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Code") {
+                Picker("Code Font", selection: $fontPreferences.codeFontName) {
+                    ForEach(FontPreferences.availableFontNames, id: \.self) { name in
+                        Text(name).tag(name)
+                    }
+                }
+                ColorPicker("Code Text", selection: $themeManager.codeColor)
+                Text("Applies to text wrapped in `backticks`.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section {
                 Button("Reset to Defaults") {
                     themeManager.resetToDefaults()
                 }
+                .help("Resets colors only — the code font is reset from the Editor tab, alongside the main editor font.")
             }
         }
         .formStyle(.grouped)
