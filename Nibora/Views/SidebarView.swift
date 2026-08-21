@@ -18,6 +18,7 @@ struct SidebarView: View {
 
     @State private var iconPickerEntry: JournalEntryRecord?
     @State private var entryPendingDeletion: JournalEntryRecord?
+    @State private var collapsedMonths: Set<String> = []
 
     /// Custom init so the within-month sort descriptor can vary with
     /// `sortMode` — SwiftData re-evaluates the fetch whenever this view is
@@ -74,9 +75,9 @@ struct SidebarView: View {
             ForEach(groupedEntries, id: \.monthKey) { group in
                 let visibleEntries = matchingEntries(in: group.entries)
                 if !visibleEntries.isEmpty {
-                    Section(monthTitle(for: group.monthKey)) {
+                    Section(isExpanded: isExpandedBinding(for: group.monthKey)) {
                         ForEach(visibleEntries, id: \.id) { entry in
-                            EntryRow(entry: entry)
+                            EntryRow(entry: entry, searchText: searchText)
                                 .tag(entry)
                                 .contextMenu {
                                     Button("Choose Icon…") {
@@ -99,10 +100,13 @@ struct SidebarView: View {
                                     }
                                 }
                         }
+                    } header: {
+                        Text(monthTitle(for: group.monthKey))
                     }
                 }
             }
         }
+        .listStyle(.sidebar)
         .popover(item: $iconPickerEntry) { entry in
             IconPickerView(selectedIcon: entry.icon) { newIcon in
                 setIcon(newIcon, for: entry)
@@ -211,6 +215,23 @@ struct SidebarView: View {
         }
     }
 
+    /// While actively searching, sections always show expanded (so a match
+    /// inside a collapsed month isn't hidden) — otherwise reflects and
+    /// updates the per-month collapsed state.
+    private func isExpandedBinding(for monthKey: String) -> Binding<Bool> {
+        guard searchText.isEmpty else { return .constant(true) }
+        return Binding(
+            get: { !collapsedMonths.contains(monthKey) },
+            set: { expanded in
+                if expanded {
+                    collapsedMonths.remove(monthKey)
+                } else {
+                    collapsedMonths.insert(monthKey)
+                }
+            }
+        )
+    }
+
     private static let monthKeyFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM"
@@ -230,6 +251,7 @@ struct SidebarView: View {
 
 private struct EntryRow: View {
     let entry: JournalEntryRecord
+    let searchText: String
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -237,17 +259,71 @@ private struct EntryRow: View {
                 .frame(width: 20)
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
-                Text(entry.title.isEmpty ? "(untitled)" : entry.title)
+                Text(highlighted(entry.title.isEmpty ? "(untitled)" : entry.title))
                     .font(.body)
                     .lineLimit(1)
-                if !entry.excerpt.isEmpty {
-                    Text(entry.excerpt)
+                let snippet = displaySnippet()
+                if !snippet.isEmpty {
+                    Text(highlighted(snippet, baseColor: .secondary))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
         }
         .padding(.vertical, 2)
+    }
+
+    /// Normally just the cached excerpt (first ~120 characters of the
+    /// body). While searching, if the match isn't within that excerpt —
+    /// it's further into the body — shows a window of body text centered
+    /// on the match instead, so there's actually something to highlight.
+    private func displaySnippet() -> String {
+        guard !searchText.isEmpty else { return entry.excerpt }
+        if entry.excerpt.range(of: searchText, options: [.caseInsensitive, .diacriticInsensitive]) != nil {
+            return entry.excerpt
+        }
+        guard let matchRange = entry.searchableBody.range(of: searchText, options: [.caseInsensitive, .diacriticInsensitive]) else {
+            return entry.excerpt
+        }
+        return contextSnippet(from: entry.searchableBody, around: matchRange)
+    }
+
+    private func contextSnippet(from text: String, around range: Range<String.Index>) -> String {
+        let contextLength = 40
+        let start = text.index(range.lowerBound, offsetBy: -contextLength, limitedBy: text.startIndex) ?? text.startIndex
+        let end = text.index(range.upperBound, offsetBy: contextLength, limitedBy: text.endIndex) ?? text.endIndex
+
+        var snippet = String(text[start..<end]).replacingOccurrences(of: "\n", with: " ")
+        if start != text.startIndex { snippet = "…" + snippet }
+        if end != text.endIndex { snippet += "…" }
+        return snippet
+    }
+
+    /// Highlights every case-insensitive occurrence of `searchText` with a
+    /// background fill. Uses `String.range(of:options:)` directly on the
+    /// original text (not a separately-lowercased copy) so the resulting
+    /// ranges always map cleanly onto the AttributedString built from that
+    /// same string. `baseColor`, when given, is baked into the
+    /// AttributedString itself rather than left to a wrapping
+    /// `.foregroundStyle()` modifier — that modifier can override
+    /// per-range AttributedString attributes (including the highlight),
+    /// which is why the title (no such modifier) highlighted correctly
+    /// while the secondary-styled excerpt/snippet didn't.
+    private func highlighted(_ text: String, baseColor: Color? = nil) -> AttributedString {
+        var attributed = AttributedString(text)
+        if let baseColor {
+            attributed.foregroundColor = baseColor
+        }
+        guard !searchText.isEmpty else { return attributed }
+
+        var searchRange = text.startIndex..<text.endIndex
+        while let foundRange = text.range(of: searchText, options: [.caseInsensitive, .diacriticInsensitive], range: searchRange) {
+            if let attributedRange = Range(foundRange, in: attributed) {
+                attributed[attributedRange].backgroundColor = .yellow.opacity(0.4)
+                attributed[attributedRange].foregroundColor = .black
+            }
+            searchRange = foundRange.upperBound..<text.endIndex
+        }
+        return attributed
     }
 }
