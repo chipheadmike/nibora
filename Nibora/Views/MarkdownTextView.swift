@@ -38,6 +38,12 @@ struct MarkdownTextView: NSViewRepresentable {
     static let highlightPattern = try! NSRegularExpression(pattern: #"==([^=\n]+?)=="#)
     static let taskListPattern = try! NSRegularExpression(pattern: #"^(\s*)([-*])(\s+)\[([ xX])\](\s+)(.*)$"#)
     static let taskListToggleScheme = "nibora-checkbox"
+    static let blockquotePattern = try! NSRegularExpression(pattern: #"^(\s*)(>)(\s?)(.*)$"#)
+    static let horizontalRulePattern = try! NSRegularExpression(pattern: #"^\s*(-{3,}|\*{3,}|_{3,})\s*$"#)
+    /// Requires a word character immediately after "#" — this is what keeps
+    /// it from ever matching a heading marker ("# Heading" has a space
+    /// there), so tags and headings never fight over the same "#".
+    static let tagPattern = try! NSRegularExpression(pattern: #"#[A-Za-z0-9][A-Za-z0-9_-]*"#)
 
     func makeNSView(context: Context) -> NSScrollView {
         let textView = DropHandlingTextView()
@@ -231,6 +237,9 @@ struct MarkdownTextView: NSViewRepresentable {
             applyBulletIndent(in: textStorage, line: line, lineRange: lineRange, fonts: fonts)
             applyNumberedListIndent(in: textStorage, line: line, lineRange: lineRange, fonts: fonts)
             applyTaskListCheckbox(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
+            applyBlockquote(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
+            applyHorizontalRule(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
+            applyTag(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
             applyEmphasis(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
             applyLinks(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
             // Applied last so code spans win over any overlapping bold/italic/
@@ -430,6 +439,60 @@ struct MarkdownTextView: NSViewRepresentable {
         let isChecked = nsString.substring(with: globalCheckboxRange).lowercased() == "x"
         textStorage.replaceCharacters(in: globalCheckboxRange, with: isChecked ? " " : "x")
         textView.didChangeText()
+    }
+
+    /// Indents and mutes/italicizes "> quoted" lines. Unlike the bullet/
+    /// numbered indents (marker at the margin, wrapped text hanging under
+    /// it), a blockquote indents uniformly — first line and wrapped
+    /// continuation lines both sit at the same offset. No vertical accent
+    /// bar: that would need real custom drawing (an NSTextAttachment cell or
+    /// overriding draw), which has proven unreliable for anything
+    /// click/paint-related in this beta, so this stays attribute-only like
+    /// everything else here.
+    private static func applyBlockquote(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager, fonts: EditorFontSet) {
+        guard blockquotePattern.firstMatch(in: line, range: NSRange(location: 0, length: (line as NSString).length)) != nil else {
+            return
+        }
+
+        let indentWidth = fonts.regular.pointSize * 1.5
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.firstLineHeadIndent = indentWidth
+        paragraphStyle.headIndent = indentWidth
+        textStorage.addAttribute(.paragraphStyle, value: paragraphStyle, range: lineRange)
+        textStorage.addAttribute(.foregroundColor, value: NSColor(theme.blockquoteColor), range: lineRange)
+        textStorage.addAttribute(.font, value: fonts.italic, range: lineRange)
+    }
+
+    /// Renders a "---"/"***"/"___" line as an actual horizontal rule rather
+    /// than literal dashes — no character is touched (a real rule would need
+    /// an NSTextAttachment or custom drawing, both avoided here as before).
+    /// The dash glyphs stay in place but go transparent, and a thick
+    /// strikethrough is drawn across the run — strikethrough is a single
+    /// continuous stroke spanning the run's width regardless of the
+    /// (invisible) glyphs underneath, so it reads as a solid rule. Font size
+    /// is left untouched (an earlier version shrank it, which collapsed the
+    /// line's height along with it and made the whole thing nearly invisible).
+    private static func applyHorizontalRule(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager, fonts: EditorFontSet) {
+        guard horizontalRulePattern.firstMatch(in: line, range: NSRange(location: 0, length: (line as NSString).length)) != nil else {
+            return
+        }
+
+        textStorage.addAttribute(.foregroundColor, value: NSColor.clear, range: lineRange)
+        textStorage.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.thick.rawValue, range: lineRange)
+        textStorage.addAttribute(.strikethroughColor, value: NSColor(theme.horizontalRuleColor), range: lineRange)
+    }
+
+    /// Colors "#tag" spans anywhere in a line — the pattern's own shape
+    /// (word char required right after "#") already keeps this from ever
+    /// matching a heading marker, so no extra exclusion logic is needed
+    /// here.
+    private static func applyTag(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager, fonts: EditorFontSet) {
+        let nsLine = line as NSString
+        for match in tagPattern.matches(in: line, range: NSRange(location: 0, length: nsLine.length)) {
+            let globalRange = NSRange(location: lineRange.location + match.range.location, length: match.range.length)
+            textStorage.addAttribute(.foregroundColor, value: NSColor(theme.tagColor), range: globalRange)
+            textStorage.addAttribute(.font, value: fonts.bold, range: globalRange)
+        }
     }
 
     /// Same treatment as bullet lines — hanging indent plus a bolded

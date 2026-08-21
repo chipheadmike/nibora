@@ -26,6 +26,10 @@ final class JournalEntryRecord {
     /// keystroke. Never used as a source for editing or display — the
     /// editor always reads the file fresh, same as before.
     var searchableBody: String = ""
+    /// Comma-joined, lowercased, unique "#tag" names found in the body at
+    /// index time (no "#"). Never edited directly — always derived from the
+    /// body, same as excerpt/searchableBody.
+    var tagsRaw: String = ""
 
     init(
         id: UUID,
@@ -39,7 +43,8 @@ final class JournalEntryRecord {
         relativePath: String,
         excerpt: String,
         fileModificationDate: Date,
-        searchableBody: String = ""
+        searchableBody: String = "",
+        tagsRaw: String = ""
     ) {
         self.id = id
         self.title = title
@@ -53,5 +58,6 @@ final class JournalEntryRecord {
         self.excerpt = excerpt
         self.fileModificationDate = fileModificationDate
         self.searchableBody = searchableBody
+        self.tagsRaw = tagsRaw
     }
 }
