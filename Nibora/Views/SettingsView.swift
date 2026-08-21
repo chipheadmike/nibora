@@ -199,6 +199,7 @@ private struct PasswordSettingsTab: View {
     @State private var confirmPassword = ""
     @State private var statusMessage: String?
     @State private var isError = false
+    @State private var generatedRecoveryCode: String?
 
     var body: some View {
         if lockManager.isLocked {
@@ -250,14 +251,41 @@ private struct PasswordSettingsTab: View {
                 }
                 Toggle("Require password after minimizing", isOn: $preferences.lockOnMinimize)
 
-                Text("This is a privacy screen, not encryption — entries stay plain text on disk either way. If you forget your password, you can remove the lock via Keychain Access.app (search \"Nibora\").")
+                Text("This is a privacy screen, not encryption — entries stay plain text on disk either way.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section("Recovery Code") {
+                if preferences.hasRecoveryCode {
+                    Text("A recovery code is set. Enter it at the lock screen if you forget your password — using it will require setting a new one.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Regenerate Recovery Code") {
+                        generatedRecoveryCode = preferences.generateRecoveryCode()
+                    }
+                } else {
+                    Text("Generate a one-time recovery code now, before you ever need it. It's shown once — save it somewhere safe.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Generate Recovery Code") {
+                        generatedRecoveryCode = preferences.generateRecoveryCode()
+                    }
+                }
+            }
+            .disabled(!preferences.hasPassword)
         }
         .formStyle(.grouped)
         .frame(width: 440)
         .fixedSize(horizontal: false, vertical: true)
+        .sheet(isPresented: Binding(
+            get: { generatedRecoveryCode != nil },
+            set: { isPresented in if !isPresented { generatedRecoveryCode = nil } }
+        )) {
+            if let generatedRecoveryCode {
+                RecoveryCodeRevealView(code: generatedRecoveryCode)
+            }
+        }
     }
 
     private func changePassword() {
@@ -288,6 +316,52 @@ private struct PasswordSettingsTab: View {
         confirmPassword = ""
         statusMessage = "Password removed."
         isError = false
+    }
+}
+
+/// Shows a freshly-generated recovery code exactly once — the app never
+/// retains a copy after this (only the hash persists), so this is the
+/// only chance to save it.
+private struct RecoveryCodeRevealView: View {
+    let code: String
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var didCopy = false
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "key.fill")
+                .font(.system(size: 32))
+                .foregroundStyle(.secondary)
+
+            Text("Your Recovery Code")
+                .font(.title3.bold())
+
+            Text(code)
+                .font(.system(.title2, design: .monospaced))
+                .textSelection(.enabled)
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.15)))
+
+            Text("Save this now — it won't be shown again. Using it later will require setting a new password.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            HStack {
+                Button(didCopy ? "Copied!" : "Copy to Clipboard") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(code, forType: .string)
+                    didCopy = true
+                }
+                Button("Done") {
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(30)
+        .frame(width: 360)
     }
 }
 
