@@ -21,6 +21,7 @@ final class ThemeManager {
     var h6Color: Color { didSet { persist(h6Color, forKey: Keys.h6) } }
     var boldColor: Color { didSet { persist(boldColor, forKey: Keys.bold) } }
     var italicColor: Color { didSet { persist(italicColor, forKey: Keys.italic) } }
+    var linkColor: Color { didSet { persist(linkColor, forKey: Keys.link) } }
 
     private enum Keys {
         static let body = "theme.bodyColor"
@@ -32,6 +33,7 @@ final class ThemeManager {
         static let h6 = "theme.h6Color"
         static let bold = "theme.boldColor"
         static let italic = "theme.italicColor"
+        static let link = "theme.linkColor"
     }
 
     private static let defaultBody = Color.primary
@@ -43,6 +45,7 @@ final class ThemeManager {
     private static let defaultH6 = Color(red: 0.52, green: 0.42, blue: 0.78)
     private static let defaultBold = Color.primary
     private static let defaultItalic = Color.primary
+    private static let defaultLink = Color(red: 0.20, green: 0.47, blue: 0.85)
 
     init() {
         bodyColor = Self.load(Keys.body) ?? Self.defaultBody
@@ -54,6 +57,7 @@ final class ThemeManager {
         h6Color = Self.load(Keys.h6) ?? Self.defaultH6
         boldColor = Self.load(Keys.bold) ?? Self.defaultBold
         italicColor = Self.load(Keys.italic) ?? Self.defaultItalic
+        linkColor = Self.load(Keys.link) ?? Self.defaultLink
     }
 
     func color(forHeadingLevel level: Int) -> Color {
@@ -77,6 +81,7 @@ final class ThemeManager {
         h6Color = Self.defaultH6
         boldColor = Self.defaultBold
         italicColor = Self.defaultItalic
+        linkColor = Self.defaultLink
     }
 
     private static func load(_ key: String) -> Color? {

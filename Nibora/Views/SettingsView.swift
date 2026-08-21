@@ -124,6 +124,7 @@ private struct AppearanceSettingsTab: View {
                 ColorPicker("###### Heading 6", selection: $themeManager.h6Color)
                 ColorPicker("Bold", selection: $themeManager.boldColor)
                 ColorPicker("Italic", selection: $themeManager.italicColor)
+                ColorPicker("Link", selection: $themeManager.linkColor)
             }
 
             Section {
