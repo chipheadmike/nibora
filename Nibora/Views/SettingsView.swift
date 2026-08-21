@@ -19,7 +19,7 @@ struct SettingsView: View {
             ImportSettingsTab()
                 .tabItem { Label("Import", systemImage: "square.and.arrow.down") }
             PasswordSettingsTab()
-                .tabItem { Label("Password", systemImage: "lock") }
+                .tabItem { Label("Password", systemImage: "lock.fill") }
         }
     }
 }
