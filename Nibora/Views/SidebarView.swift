@@ -19,6 +19,7 @@ struct SidebarView: View {
     @State private var iconPickerEntry: JournalEntryRecord?
     @State private var entryPendingDeletion: JournalEntryRecord?
     @State private var collapsedMonths: Set<String> = []
+    @State private var selectedTag: String?
 
     /// Custom init so the within-month sort descriptor can vary with
     /// `sortMode` — SwiftData re-evaluates the fetch whenever this view is
@@ -57,7 +58,48 @@ struct SidebarView: View {
                 .padding(.bottom, 4)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+            tagFilterRow
+
             list
+        }
+    }
+
+    /// All distinct "#tag" names used anywhere in the vault, derived from
+    /// each entry's cached tagsRaw (itself computed at index time from the
+    /// body — see EntryIndexer.extractTags). Hidden entirely when no entry
+    /// uses any tags.
+    private var allTags: [String] {
+        var tags = Set<String>()
+        for entry in entries where !entry.tagsRaw.isEmpty {
+            tags.formUnion(entry.tagsRaw.split(separator: ",").map(String.init))
+        }
+        return tags.sorted()
+    }
+
+    @ViewBuilder
+    private var tagFilterRow: some View {
+        if !allTags.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(allTags, id: \.self) { tag in
+                        Button {
+                            selectedTag = (selectedTag == tag) ? nil : tag
+                        } label: {
+                            Text("#\(tag)")
+                                .font(.caption)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule().fill(selectedTag == tag ? Color.accentColor : Color.secondary.opacity(0.15))
+                                )
+                                .foregroundStyle(selectedTag == tag ? Color.white : Color.primary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+            .padding(.bottom, 6)
         }
     }
 
@@ -209,17 +251,21 @@ struct SidebarView: View {
     }
 
     private func matchingEntries(in section: some Sequence<JournalEntryRecord>) -> [JournalEntryRecord] {
-        guard !searchText.isEmpty else { return Array(section) }
-        return section.filter {
+        var results = Array(section)
+        if let selectedTag {
+            results = results.filter { $0.tagsRaw.split(separator: ",").map(String.init).contains(selectedTag) }
+        }
+        guard !searchText.isEmpty else { return results }
+        return results.filter {
             $0.title.localizedStandardContains(searchText) || $0.searchableBody.localizedStandardContains(searchText)
         }
     }
 
-    /// While actively searching, sections always show expanded (so a match
-    /// inside a collapsed month isn't hidden) — otherwise reflects and
-    /// updates the per-month collapsed state.
+    /// While actively searching or filtering by tag, sections always show
+    /// expanded (so a match inside a collapsed month isn't hidden) —
+    /// otherwise reflects and updates the per-month collapsed state.
     private func isExpandedBinding(for monthKey: String) -> Binding<Bool> {
-        guard searchText.isEmpty else { return .constant(true) }
+        guard searchText.isEmpty, selectedTag == nil else { return .constant(true) }
         return Binding(
             get: { !collapsedMonths.contains(monthKey) },
             set: { expanded in

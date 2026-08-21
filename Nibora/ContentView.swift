@@ -12,14 +12,20 @@ struct ContentView: View {
     @Environment(VaultManager.self) private var vaultManager
     @Environment(EntrySortPreferences.self) private var sortPreferences
     @Environment(JournalTitlePreferences.self) private var journalTitlePreferences
+    @Environment(EntryTemplatePreferences.self) private var entryTemplatePreferences
     @Environment(AppLockManager.self) private var appLockManager
     @Environment(\.modelContext) private var modelContext
     @State private var selection: JournalEntryRecord?
     @State private var searchText = ""
+    @State private var isQuickSwitcherPresented = false
+    @State private var isOnThisDayPresented = false
 
     /// Live count of entries dated today, so the New Entry button can hide
     /// itself the moment today's entry exists — journals are one-per-day.
     @Query private var todaysEntries: [JournalEntryRecord]
+
+    /// Backs the Cmd+K quick switcher — every entry, newest first.
+    @Query(sort: \JournalEntryRecord.date, order: .reverse) private var allEntriesForSwitcher: [JournalEntryRecord]
 
     init() {
         let todayStart = Calendar.current.startOfDay(for: Date())
@@ -28,6 +34,19 @@ struct ContentView: View {
 
     private var hasEntryForToday: Bool {
         !todaysEntries.isEmpty
+    }
+
+    /// Entries whose date shares today's month/day (any year), excluding
+    /// today's own entry — most recent past year first.
+    private var onThisDayEntries: [JournalEntryRecord] {
+        let calendar = Calendar.current
+        let today = calendar.dateComponents([.month, .day], from: Date())
+        return allEntriesForSwitcher
+            .filter { entry in
+                let components = calendar.dateComponents([.month, .day], from: entry.date)
+                return components.month == today.month && components.day == today.day && !calendar.isDateInToday(entry.date)
+            }
+            .sorted { $0.date > $1.date }
     }
 
     var body: some View {
@@ -58,7 +77,18 @@ struct ContentView: View {
                         }
                         ToolbarItem {
                             Button("Rescan Vault", systemImage: "arrow.clockwise") {
-                                EntryIndexer(modelContext: modelContext).rescanFullVault(at: vaultURL)
+                                EntryIndexer(modelContext: modelContext).rescanFullVault(at: vaultURL, force: true)
+                            }
+                        }
+                        ToolbarItem {
+                            Button("On This Day", systemImage: "calendar.badge.clock") {
+                                isOnThisDayPresented = true
+                            }
+                            .popover(isPresented: $isOnThisDayPresented) {
+                                OnThisDayView(entries: onThisDayEntries) { entry in
+                                    selection = entry
+                                    isOnThisDayPresented = false
+                                }
                             }
                         }
                     }
@@ -74,6 +104,21 @@ struct ContentView: View {
                 EntryIndexer(modelContext: modelContext).rescanFullVault(at: vaultURL)
             }
             .onChange(of: vaultURL) { selection = nil }
+            .background {
+                Button("Quick Switcher") { isQuickSwitcherPresented = true }
+                    .keyboardShortcut("k", modifiers: .command)
+                    .hidden()
+            }
+            .sheet(isPresented: $isQuickSwitcherPresented) {
+                QuickSwitcherView(
+                    entries: allEntriesForSwitcher,
+                    onSelect: { entry in
+                        selection = entry
+                        isQuickSwitcherPresented = false
+                    },
+                    onDismiss: { isQuickSwitcherPresented = false }
+                )
+            }
         } else {
             VaultPickerView()
         }
@@ -82,7 +127,10 @@ struct ContentView: View {
     private func createEntry(in vaultURL: URL) {
         let now = Date()
         let title = Self.titleDateFormatter.string(from: now)
-        guard let relativePath = try? EntryFileWriter.createEntry(date: now, title: title, in: vaultURL) else { return }
+        let body = entryTemplatePreferences.isEnabled
+            ? EntryTemplatePreferences.rendering(entryTemplatePreferences.templateText, for: now)
+            : ""
+        guard let relativePath = try? EntryFileWriter.createEntry(date: now, title: title, body: body, in: vaultURL) else { return }
         let fileURL = vaultURL.appendingPathComponent(relativePath)
         let indexer = EntryIndexer(modelContext: modelContext)
         indexer.reindexSingleFile(at: fileURL, vaultURL: vaultURL)
@@ -110,6 +158,7 @@ struct ContentView: View {
         .environment(TimestampHotkeyPreferences())
         .environment(FontPreferences())
         .environment(JournalTitlePreferences())
+        .environment(EntryTemplatePreferences())
         .environment(AppLockManager(preferences: PasswordLockPreferences()))
         .modelContainer(for: JournalEntryRecord.self, inMemory: true)
 }
