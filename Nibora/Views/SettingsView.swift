@@ -28,10 +28,12 @@ private struct GeneralSettingsTab: View {
     @Environment(VaultManager.self) private var vaultManager
     @Environment(EntrySortPreferences.self) private var sortPreferences
     @Environment(JournalTitlePreferences.self) private var journalTitlePreferences
+    @Environment(EntryTemplatePreferences.self) private var entryTemplatePreferences
 
     var body: some View {
         @Bindable var sortPreferences = sortPreferences
         @Bindable var journalTitlePreferences = journalTitlePreferences
+        @Bindable var entryTemplatePreferences = entryTemplatePreferences
 
         Form {
             Section("Vault") {
@@ -58,6 +60,18 @@ private struct GeneralSettingsTab: View {
                     }
                 }
                 Text("Manual lets you drag/reorder entries yourself via the sidebar's context menu. The date modes ignore that order and always sort live.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Template") {
+                Toggle("Start new entries from a template", isOn: $entryTemplatePreferences.isEnabled)
+                TextEditor(text: $entryTemplatePreferences.templateText)
+                    .font(.body.monospaced())
+                    .frame(height: 120)
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
+                    .disabled(!entryTemplatePreferences.isEnabled)
+                Text("Applied as the starting body text whenever you create a new entry. Use {{weekday}} to insert the day's name, e.g. \"### {{weekday}}\" becomes \"### Monday\".")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -124,6 +138,9 @@ private struct AppearanceSettingsTab: View {
                 ColorPicker("Italic", selection: $themeManager.italicColor)
                 ColorPicker("Link", selection: $themeManager.linkColor)
                 ColorPicker("Strikethrough", selection: $themeManager.strikethroughColor)
+                ColorPicker("Blockquote", selection: $themeManager.blockquoteColor)
+                ColorPicker("Horizontal Rule", selection: $themeManager.horizontalRuleColor)
+                ColorPicker("Tag", selection: $themeManager.tagColor)
             }
 
             Section("Highlight") {
@@ -393,6 +410,7 @@ private struct RecoveryCodeRevealView: View {
         .environment(TimestampHotkeyPreferences())
         .environment(FontPreferences())
         .environment(JournalTitlePreferences())
+        .environment(EntryTemplatePreferences())
         .environment(PasswordLockPreferences())
         .environment(AppLockManager(preferences: PasswordLockPreferences()))
         .modelContainer(for: JournalEntryRecord.self, inMemory: true)

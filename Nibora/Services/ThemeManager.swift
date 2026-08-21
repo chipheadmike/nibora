@@ -25,6 +25,9 @@ final class ThemeManager {
     var codeColor: Color { didSet { persist(codeColor, forKey: Keys.code) } }
     var strikethroughColor: Color { didSet { persist(strikethroughColor, forKey: Keys.strikethrough) } }
     var highlightColor: Color { didSet { persist(highlightColor, forKey: Keys.highlight) } }
+    var blockquoteColor: Color { didSet { persist(blockquoteColor, forKey: Keys.blockquote) } }
+    var horizontalRuleColor: Color { didSet { persist(horizontalRuleColor, forKey: Keys.horizontalRule) } }
+    var tagColor: Color { didSet { persist(tagColor, forKey: Keys.tag) } }
 
     private enum Keys {
         static let body = "theme.bodyColor"
@@ -40,6 +43,9 @@ final class ThemeManager {
         static let code = "theme.codeColor"
         static let strikethrough = "theme.strikethroughColor"
         static let highlight = "theme.highlightColor"
+        static let blockquote = "theme.blockquoteColor"
+        static let horizontalRule = "theme.horizontalRuleColor"
+        static let tag = "theme.tagColor"
     }
 
     private static let defaultBody = Color.primary
@@ -57,6 +63,9 @@ final class ThemeManager {
     // Solid (not opacity-based) since color persistence round-trips through
     // hex, which doesn't preserve alpha — see Color/NSColor hexString below.
     private static let defaultHighlight = Color(red: 0.85, green: 0.70, blue: 0.25)
+    private static let defaultBlockquote = Color(red: 0.45, green: 0.50, blue: 0.58)
+    private static let defaultHorizontalRule = Color(red: 0.55, green: 0.55, blue: 0.55)
+    private static let defaultTag = Color(red: 0.30, green: 0.62, blue: 0.55)
 
     init() {
         bodyColor = Self.load(Keys.body) ?? Self.defaultBody
@@ -72,6 +81,9 @@ final class ThemeManager {
         codeColor = Self.load(Keys.code) ?? Self.defaultCode
         strikethroughColor = Self.load(Keys.strikethrough) ?? Self.defaultStrikethrough
         highlightColor = Self.load(Keys.highlight) ?? Self.defaultHighlight
+        blockquoteColor = Self.load(Keys.blockquote) ?? Self.defaultBlockquote
+        horizontalRuleColor = Self.load(Keys.horizontalRule) ?? Self.defaultHorizontalRule
+        tagColor = Self.load(Keys.tag) ?? Self.defaultTag
     }
 
     func color(forHeadingLevel level: Int) -> Color {
@@ -99,6 +111,9 @@ final class ThemeManager {
         codeColor = Self.defaultCode
         strikethroughColor = Self.defaultStrikethrough
         highlightColor = Self.defaultHighlight
+        blockquoteColor = Self.defaultBlockquote
+        horizontalRuleColor = Self.defaultHorizontalRule
+        tagColor = Self.defaultTag
     }
 
     private static func load(_ key: String) -> Color? {

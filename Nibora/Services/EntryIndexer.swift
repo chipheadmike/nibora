@@ -17,7 +17,11 @@ final class EntryIndexer {
 
     /// Full walk of the vault: upserts changed/new entries, deletes index
     /// rows whose backing file is gone. Call on launch and on vault change.
-    func rescanFullVault(at vaultURL: URL) {
+    /// `force` reparses every file regardless of cached modification date —
+    /// used by the manual "Rescan Vault" action so it also backfills fields
+    /// added after an entry was last indexed (e.g. tags), not just structural
+    /// changes.
+    func rescanFullVault(at vaultURL: URL, force: Bool = false) {
         let fileManager = FileManager.default
         var seenRelativePaths = Set<String>()
 
@@ -36,7 +40,7 @@ final class EntryIndexer {
 
             for fileURL in entryFiles where fileURL.pathExtension == "md" {
                 seenRelativePaths.insert(EntryFileWriter.relativePath(of: fileURL, in: vaultURL))
-                reindexSingleFile(at: fileURL, vaultURL: vaultURL)
+                reindexSingleFile(at: fileURL, vaultURL: vaultURL, force: force)
             }
         }
 
@@ -45,8 +49,8 @@ final class EntryIndexer {
     }
 
     /// Re-indexes one file, skipping the parse if its on-disk modification
-    /// date matches what's already cached.
-    func reindexSingleFile(at fileURL: URL, vaultURL: URL) {
+    /// date matches what's already cached — unless `force` is set.
+    func reindexSingleFile(at fileURL: URL, vaultURL: URL, force: Bool = false) {
         guard let resourceValues = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey]),
               let modificationDate = resourceValues.contentModificationDate else { return }
 
@@ -57,7 +61,7 @@ final class EntryIndexer {
         )
         let existing = try? modelContext.fetch(descriptor).first
 
-        if let existing, existing.fileModificationDate == modificationDate {
+        if !force, let existing, existing.fileModificationDate == modificationDate {
             return
         }
 
@@ -71,6 +75,7 @@ final class EntryIndexer {
 
         let monthKey = EntryFileWriter.monthKey(for: frontmatter.date)
         let excerpt = String(parsed.body.prefix(120))
+        let tagsRaw = Self.extractTags(from: parsed.body)
 
         if let existing {
             existing.title = frontmatter.title
@@ -83,6 +88,7 @@ final class EntryIndexer {
             existing.excerpt = excerpt
             existing.fileModificationDate = modificationDate
             existing.searchableBody = parsed.body
+            existing.tagsRaw = tagsRaw
         } else {
             let record = JournalEntryRecord(
                 id: frontmatter.id,
@@ -96,12 +102,27 @@ final class EntryIndexer {
                 relativePath: relativePath,
                 excerpt: excerpt,
                 fileModificationDate: modificationDate,
-                searchableBody: parsed.body
+                searchableBody: parsed.body,
+                tagsRaw: tagsRaw
             )
             modelContext.insert(record)
         }
 
         try? modelContext.save()
+    }
+
+    /// Reuses the editor's own "#tag" pattern (MarkdownTextView.tagPattern)
+    /// so a string only ever counts as a tag in one place — no separate
+    /// definition to drift out of sync with what actually renders as a tag.
+    private static func extractTags(from body: String) -> String {
+        let nsBody = body as NSString
+        let matches = MarkdownTextView.tagPattern.matches(in: body, range: NSRange(location: 0, length: nsBody.length))
+        var tags = Set<String>()
+        for match in matches {
+            let tagText = nsBody.substring(with: match.range)
+            tags.insert(String(tagText.dropFirst()).lowercased())
+        }
+        return tags.sorted().joined(separator: ",")
     }
 
     private func pruneMissingEntries(keeping seenRelativePaths: Set<String>) {

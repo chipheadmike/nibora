@@ -16,6 +16,7 @@ struct NiboraApp: App {
     @State private var hotkeyPreferences = TimestampHotkeyPreferences()
     @State private var fontPreferences = FontPreferences()
     @State private var journalTitlePreferences = JournalTitlePreferences()
+    @State private var entryTemplatePreferences = EntryTemplatePreferences()
     @State private var passwordLockPreferences: PasswordLockPreferences
     @State private var appLockManager: AppLockManager
 
@@ -42,6 +43,7 @@ struct NiboraApp: App {
                 .environment(hotkeyPreferences)
                 .environment(fontPreferences)
                 .environment(journalTitlePreferences)
+                .environment(entryTemplatePreferences)
                 .environment(passwordLockPreferences)
                 .environment(appLockManager)
         }
@@ -55,6 +57,7 @@ struct NiboraApp: App {
                 .environment(hotkeyPreferences)
                 .environment(fontPreferences)
                 .environment(journalTitlePreferences)
+                .environment(entryTemplatePreferences)
                 .environment(passwordLockPreferences)
                 .environment(appLockManager)
         }
