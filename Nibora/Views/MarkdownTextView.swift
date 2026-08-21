@@ -21,6 +21,7 @@ struct MarkdownTextView: NSViewRepresentable {
     let theme: ThemeManager
     let hotkeyPreferences: TimestampHotkeyPreferences
     let fontPreferences: FontPreferences
+    let isFocusModeEnabled: Bool
 
     static let imageReferencePattern = try! NSRegularExpression(pattern: #"!\[[^\]]*\]\(([^)]+)\)"#)
     static let boldItalicAsteriskPattern = try! NSRegularExpression(pattern: #"\*\*\*([^*]+?)\*\*\*"#)
@@ -30,7 +31,13 @@ struct MarkdownTextView: NSViewRepresentable {
     static let italicAsteriskPattern = try! NSRegularExpression(pattern: #"(?<!\*)\*([^*]+?)\*(?!\*)"#)
     static let italicUnderscorePattern = try! NSRegularExpression(pattern: #"(?<!_)_([^_]+?)_(?!_)"#)
     static let bulletListPattern = try! NSRegularExpression(pattern: #"^(\s*)([-*])(\s+)(.*)$"#)
+    static let numberedListPattern = try! NSRegularExpression(pattern: #"^(\s*)(\d+)([.)])(\s+)(.*)$"#)
     static let linkPattern = try! NSRegularExpression(pattern: #"\[([^\]]+)\]\(([^)]+)\)"#)
+    static let inlineCodePattern = try! NSRegularExpression(pattern: #"`([^`\n]+)`"#)
+    static let strikethroughPattern = try! NSRegularExpression(pattern: #"~~([^~\n]+?)~~"#)
+    static let highlightPattern = try! NSRegularExpression(pattern: #"==([^=\n]+?)=="#)
+    static let taskListPattern = try! NSRegularExpression(pattern: #"^(\s*)([-*])(\s+)\[([ xX])\](\s+)(.*)$"#)
+    static let taskListToggleScheme = "nibora-checkbox"
 
     func makeNSView(context: Context) -> NSScrollView {
         let textView = DropHandlingTextView()
@@ -65,7 +72,7 @@ struct MarkdownTextView: NSViewRepresentable {
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = false
 
-        Self.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences)
+        Self.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled)
 
         return scrollView
     }
@@ -77,29 +84,41 @@ struct MarkdownTextView: NSViewRepresentable {
         if textView.string != text {
             textView.string = text
         }
-        Self.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences)
+        context.coordinator.isFocusModeEnabled = isFocusModeEnabled
+        Self.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled)
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, theme: theme, fontPreferences: fontPreferences)
+        Coordinator(text: $text, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled)
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
         var theme: ThemeManager
         var fontPreferences: FontPreferences
+        var isFocusModeEnabled: Bool
 
-        init(text: Binding<String>, theme: ThemeManager, fontPreferences: FontPreferences) {
+        init(text: Binding<String>, theme: ThemeManager, fontPreferences: FontPreferences, isFocusModeEnabled: Bool) {
             self.text = text
             self.theme = theme
             self.fontPreferences = fontPreferences
+            self.isFocusModeEnabled = isFocusModeEnabled
         }
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? DropHandlingTextView else { return }
             text.wrappedValue = textView.string
-            MarkdownTextView.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences)
+            MarkdownTextView.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled)
             textView.checkForLinkBracketClosure()
+        }
+
+        /// Re-dims/un-dims paragraphs as the cursor moves, independent of any
+        /// text edit — textViewDidChangeSelection is the standard AppKit
+        /// callback for this, unrelated to the TextKit 2 command-routing
+        /// issues noted elsewhere in this file.
+        func textViewDidChangeSelection(_ notification: Notification) {
+            guard isFocusModeEnabled, let textView = notification.object as? DropHandlingTextView else { return }
+            MarkdownTextView.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled)
         }
 
         /// Intercepts Return via the modern text-input command path rather
@@ -109,8 +128,25 @@ struct MarkdownTextView: NSViewRepresentable {
         /// NSTextInputClient-driven text views.
         func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
             guard commandSelector == #selector(NSResponder.insertNewline(_:)) else { return false }
-            return MarkdownTextView.handleBulletContinuation(in: textView)
+            return MarkdownTextView.handleListContinuation(in: textView)
         }
+
+        /// Task list checkboxes are tagged with a private `nibora-checkbox://`
+        /// `.link` attribute (see applyTaskListCheckbox) so they piggyback on
+        /// NSTextView's native Cmd+Click-on-link handling — the only
+        /// click-driven interaction that's proven reliable this beta.
+        /// Real markdown links (http/https) fall through to the default
+        /// open-in-browser behavior by returning false.
+        func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+            guard let url = link as? URL, url.scheme == MarkdownTextView.taskListToggleScheme else { return false }
+            MarkdownTextView.toggleTaskListCheckbox(in: textView, at: charIndex)
+            return true
+        }
+    }
+
+    @discardableResult
+    static func handleListContinuation(in textView: NSTextView) -> Bool {
+        handleBulletContinuation(in: textView) || handleNumberedListContinuation(in: textView)
     }
 
     /// If the cursor is at the end of a "- item" (or "* item") line, Return
@@ -118,7 +154,7 @@ struct MarkdownTextView: NSViewRepresentable {
     /// removes the marker and exits the list instead of continuing forever.
     /// Returns false (unhandled) when the line isn't a bullet line at all.
     @discardableResult
-    static func handleBulletContinuation(in textView: NSTextView) -> Bool {
+    private static func handleBulletContinuation(in textView: NSTextView) -> Bool {
         let nsString = textView.string as NSString
         let cursorLocation = textView.selectedRange().location
         let lineRange = nsString.lineRange(for: NSRange(location: cursorLocation, length: 0))
@@ -142,13 +178,43 @@ struct MarkdownTextView: NSViewRepresentable {
         return true
     }
 
+    /// Same idea as bullet continuation, but for "1. item" / "1) item"
+    /// lines — continuing increments the number instead of repeating a
+    /// fixed marker.
+    @discardableResult
+    private static func handleNumberedListContinuation(in textView: NSTextView) -> Bool {
+        let nsString = textView.string as NSString
+        let cursorLocation = textView.selectedRange().location
+        let lineRange = nsString.lineRange(for: NSRange(location: cursorLocation, length: 0))
+        let prefixRange = NSRange(location: lineRange.location, length: cursorLocation - lineRange.location)
+        let linePrefix = nsString.substring(with: prefixRange) as NSString
+
+        guard let match = numberedListPattern.firstMatch(in: linePrefix as String, range: NSRange(location: 0, length: linePrefix.length)) else {
+            return false
+        }
+
+        let indent = linePrefix.substring(with: match.range(at: 1))
+        let numberString = linePrefix.substring(with: match.range(at: 2))
+        let delimiter = linePrefix.substring(with: match.range(at: 3))
+        let content = linePrefix.substring(with: match.range(at: 5))
+
+        if content.trimmingCharacters(in: .whitespaces).isEmpty {
+            textView.insertText("", replacementRange: prefixRange)
+            textView.insertText("\n", replacementRange: textView.selectedRange())
+        } else {
+            let nextNumber = (Int(numberString) ?? 0) + 1
+            textView.insertText("\n\(indent)\(nextNumber)\(delimiter) ", replacementRange: textView.selectedRange())
+        }
+        return true
+    }
+
     /// Recolors every line by its heading level and applies real bold/italic
     /// font traits to `**`/`__`/`*`/`_` spans — all via attribute-only edits,
     /// never touching the characters themselves, so cursor position and undo
     /// history are untouched.
-    static func applyMarkdownStyling(in textView: NSTextView, theme: ThemeManager, fontPreferences: FontPreferences) {
+    static func applyMarkdownStyling(in textView: NSTextView, theme: ThemeManager, fontPreferences: FontPreferences, isFocusModeEnabled: Bool = false) {
         guard let textStorage = textView.textStorage else { return }
-        let fonts = EditorFontSet(fontName: fontPreferences.fontName, fontSize: fontPreferences.fontSize)
+        let fonts = EditorFontSet(fontName: fontPreferences.fontName, fontSize: fontPreferences.fontSize, codeFontName: fontPreferences.codeFontName)
         let fullText = textStorage.string as NSString
         let fullRange = NSRange(location: 0, length: fullText.length)
         guard fullRange.length > 0 else { return }
@@ -163,10 +229,98 @@ struct MarkdownTextView: NSViewRepresentable {
                 textStorage.addAttribute(.foregroundColor, value: NSColor(theme.color(forHeadingLevel: level)), range: lineRange)
             }
             applyBulletIndent(in: textStorage, line: line, lineRange: lineRange, fonts: fonts)
+            applyNumberedListIndent(in: textStorage, line: line, lineRange: lineRange, fonts: fonts)
+            applyTaskListCheckbox(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
             applyEmphasis(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
             applyLinks(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
+            // Applied last so code spans win over any overlapping bold/italic/
+            // link styling within backticks, matching standard markdown
+            // semantics (code content isn't further interpreted as markup).
+            applyInlineCode(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
+            applyStrikethrough(in: textStorage, line: line, lineRange: lineRange, theme: theme)
+            applyHighlight(in: textStorage, line: line, lineRange: lineRange, theme: theme)
         }
+
+        // Applied after all other styling so it uniformly mutes everything
+        // outside the focused paragraph regardless of its normal color
+        // (heading, link, code, etc.) — a flat dim rather than per-element.
+        if isFocusModeEnabled {
+            let focusedRange = focusedParagraphRange(in: textView)
+            let dimColor = NSColor(theme.bodyColor).withAlphaComponent(0.25)
+            if focusedRange.location > fullRange.location {
+                textStorage.addAttribute(.foregroundColor, value: dimColor, range: NSRange(location: fullRange.location, length: focusedRange.location - fullRange.location))
+            }
+            let afterFocusedStart = focusedRange.location + focusedRange.length
+            let fullEnd = fullRange.location + fullRange.length
+            if afterFocusedStart < fullEnd {
+                textStorage.addAttribute(.foregroundColor, value: dimColor, range: NSRange(location: afterFocusedStart, length: fullEnd - afterFocusedStart))
+            }
+        }
+
         textStorage.endEditing()
+    }
+
+    /// The contiguous run of non-blank lines surrounding the cursor — a
+    /// blank line on either side marks the paragraph boundary. Used by focus
+    /// mode to decide what stays fully visible while everything else dims.
+    private static func focusedParagraphRange(in textView: NSTextView) -> NSRange {
+        let nsString = textView.string as NSString
+        let cursorLocation = min(textView.selectedRange().location, nsString.length)
+        let cursorLineRange = nsString.lineRange(for: NSRange(location: cursorLocation, length: 0))
+
+        func isBlank(_ range: NSRange) -> Bool {
+            nsString.substring(with: range).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+
+        var start = cursorLineRange.location
+        while start > 0 {
+            let previousLineRange = nsString.lineRange(for: NSRange(location: start - 1, length: 0))
+            if isBlank(previousLineRange) { break }
+            start = previousLineRange.location
+        }
+
+        var end = cursorLineRange.location + cursorLineRange.length
+        while end < nsString.length {
+            let nextLineRange = nsString.lineRange(for: NSRange(location: end, length: 0))
+            if isBlank(nextLineRange) { break }
+            end = nextLineRange.location + nextLineRange.length
+        }
+
+        return NSRange(location: start, length: end - start)
+    }
+
+    /// Colors, monospaces (via the user's chosen code font), and gives a
+    /// subtle background pill to `` `code` `` spans.
+    private static func applyInlineCode(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager, fonts: EditorFontSet) {
+        let nsLine = line as NSString
+        for match in inlineCodePattern.matches(in: line, range: NSRange(location: 0, length: nsLine.length)) {
+            let globalRange = NSRange(location: lineRange.location + match.range.location, length: match.range.length)
+            textStorage.addAttribute(.font, value: fonts.code, range: globalRange)
+            textStorage.addAttribute(.foregroundColor, value: NSColor(theme.codeColor), range: globalRange)
+            textStorage.addAttribute(.backgroundColor, value: NSColor.textBackgroundColor.blended(withFraction: 0.08, of: .labelColor) ?? NSColor.textBackgroundColor, range: globalRange)
+        }
+    }
+
+    /// Strikes through and mutes `~~text~~` spans (marker included, matching
+    /// how bold/italic/code color their whole match rather than just the
+    /// inner text).
+    private static func applyStrikethrough(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager) {
+        let nsLine = line as NSString
+        for match in strikethroughPattern.matches(in: line, range: NSRange(location: 0, length: nsLine.length)) {
+            let globalRange = NSRange(location: lineRange.location + match.range.location, length: match.range.length)
+            textStorage.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: globalRange)
+            textStorage.addAttribute(.foregroundColor, value: NSColor(theme.strikethroughColor), range: globalRange)
+        }
+    }
+
+    /// Gives `==text==` spans a highlighter-style background (marker
+    /// included).
+    private static func applyHighlight(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager) {
+        let nsLine = line as NSString
+        for match in highlightPattern.matches(in: line, range: NSRange(location: 0, length: nsLine.length)) {
+            let globalRange = NSRange(location: lineRange.location + match.range.location, length: match.range.length)
+            textStorage.addAttribute(.backgroundColor, value: NSColor(theme.highlightColor), range: globalRange)
+        }
     }
 
     /// Colors and underlines the `[text]` portion of a `[text](url)` link
@@ -218,6 +372,82 @@ struct MarkdownTextView: NSViewRepresentable {
         textStorage.addAttribute(.paragraphStyle, value: paragraphStyle, range: lineRange)
 
         let markerRange = NSRange(location: lineRange.location + match.range(at: 2).location, length: match.range(at: 2).length)
+        textStorage.addAttribute(.font, value: fonts.bold, range: markerRange)
+    }
+
+    /// Styles the "[ ]"/"[x]" span of a task list line and tags it with a
+    /// `.link` attribute using a private `nibora-checkbox://` scheme —
+    /// clicking it (Cmd+Click, same gesture the real markdown links already
+    /// rely on) routes to `clickedOnLink` below rather than opening a URL.
+    /// This reuses the one click-driven interaction proven reliable in this
+    /// beta instead of a custom mouseDown/gesture-recognizer override, which
+    /// has failed every other time it's been tried in this file. Checked
+    /// items also get their content struck through, same visual language as
+    /// `~~text~~`.
+    private static func applyTaskListCheckbox(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager, fonts: EditorFontSet) {
+        let nsLine = line as NSString
+        guard let match = taskListPattern.firstMatch(in: line, range: NSRange(location: 0, length: nsLine.length)) else {
+            return
+        }
+
+        let checkboxCharRange = match.range(at: 4)
+        let isChecked = nsLine.substring(with: checkboxCharRange).lowercased() == "x"
+        let bracketRange = NSRange(location: checkboxCharRange.location - 1, length: checkboxCharRange.length + 2)
+        let globalBracketRange = NSRange(location: lineRange.location + bracketRange.location, length: bracketRange.length)
+
+        textStorage.addAttribute(.font, value: fonts.bold, range: globalBracketRange)
+        textStorage.addAttribute(.foregroundColor, value: NSColor(isChecked ? theme.linkColor : theme.boldColor), range: globalBracketRange)
+        if let toggleURL = URL(string: "\(taskListToggleScheme)://toggle") {
+            textStorage.addAttribute(.link, value: toggleURL, range: globalBracketRange)
+            textStorage.addAttribute(.cursor, value: NSCursor.pointingHand, range: globalBracketRange)
+        }
+
+        guard isChecked else { return }
+        let contentRange = match.range(at: 6)
+        guard contentRange.location != NSNotFound, contentRange.length > 0 else { return }
+        let globalContentRange = NSRange(location: lineRange.location + contentRange.location, length: contentRange.length)
+        textStorage.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: globalContentRange)
+        textStorage.addAttribute(.foregroundColor, value: NSColor(theme.strikethroughColor), range: globalContentRange)
+    }
+
+    /// Flips a task list item's "[ ]"/"[x]" character in place at the given
+    /// character index (the click location handed back by `clickedOnLink`),
+    /// then notifies the text view so the bound text updates and styling
+    /// (including the new strikethrough state) reapplies.
+    static func toggleTaskListCheckbox(in textView: NSTextView, at charIndex: Int) {
+        guard let textStorage = textView.textStorage else { return }
+        let nsString = textStorage.string as NSString
+        guard charIndex >= 0, charIndex < nsString.length else { return }
+
+        let lineRange = nsString.lineRange(for: NSRange(location: charIndex, length: 0))
+        let line = nsString.substring(with: lineRange)
+        guard let match = taskListPattern.firstMatch(in: line, range: NSRange(location: 0, length: (line as NSString).length)) else {
+            return
+        }
+
+        let checkboxCharRange = match.range(at: 4)
+        let globalCheckboxRange = NSRange(location: lineRange.location + checkboxCharRange.location, length: checkboxCharRange.length)
+        let isChecked = nsString.substring(with: globalCheckboxRange).lowercased() == "x"
+        textStorage.replaceCharacters(in: globalCheckboxRange, with: isChecked ? " " : "x")
+        textView.didChangeText()
+    }
+
+    /// Same treatment as bullet lines — hanging indent plus a bolded
+    /// marker, covering both the number and its delimiter ("1." or "1)").
+    private static func applyNumberedListIndent(in textStorage: NSTextStorage, line: String, lineRange: NSRange, fonts: EditorFontSet) {
+        guard let match = numberedListPattern.firstMatch(in: line, range: NSRange(location: 0, length: (line as NSString).length)) else {
+            return
+        }
+
+        let indentWidth = fonts.regular.pointSize * 2.5
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.firstLineHeadIndent = 0
+        paragraphStyle.headIndent = indentWidth
+        textStorage.addAttribute(.paragraphStyle, value: paragraphStyle, range: lineRange)
+
+        let numberRange = match.range(at: 2)
+        let delimiterRange = match.range(at: 3)
+        let markerRange = NSRange(location: lineRange.location + numberRange.location, length: numberRange.length + delimiterRange.length)
         textStorage.addAttribute(.font, value: fonts.bold, range: markerRange)
     }
 
@@ -349,8 +579,25 @@ final class DropHandlingTextView: NSTextView {
         let bracketRange = NSRange(location: openIndex, length: cursorLocation - openIndex)
         let linkText = nsString.substring(with: NSRange(location: openIndex + 1, length: cursorLocation - openIndex - 2))
         guard !linkText.isEmpty else { return }
+        guard !isTaskListCheckboxBracket(nsString: nsString, openIndex: openIndex, bracketContent: linkText) else { return }
 
         showLinkPopover(for: bracketRange, linkText: linkText)
+    }
+
+    /// "- [ ]" and "- [x]" (task list checkboxes) look identical to the link
+    /// popover's "[text]" trigger at the character level — a "]" closing a
+    /// non-empty "[...]" span. Distinguishes them so typing a checkbox
+    /// doesn't spuriously prompt for a URL: true only when the bracket's
+    /// content is checkbox-shaped (blank or "x") AND everything before it on
+    /// the line is just a bullet marker.
+    private func isTaskListCheckboxBracket(nsString: NSString, openIndex: Int, bracketContent: String) -> Bool {
+        let trimmedContent = bracketContent.trimmingCharacters(in: .whitespaces)
+        guard trimmedContent.isEmpty || trimmedContent.lowercased() == "x" else { return false }
+
+        let lineRange = nsString.lineRange(for: NSRange(location: openIndex, length: 0))
+        let prefix = nsString.substring(with: NSRange(location: lineRange.location, length: openIndex - lineRange.location))
+        let trimmedPrefix = prefix.trimmingCharacters(in: .whitespaces)
+        return trimmedPrefix == "-" || trimmedPrefix == "*"
     }
 
     private func showLinkPopover(for bracketRange: NSRange, linkText: String) {
@@ -448,15 +695,17 @@ final class DropHandlingTextView: NSTextView {
 }
 
 /// Resolves the editor's regular/bold/italic/bold-italic fonts from the
-/// user's chosen family + size. Falls back to the system monospaced font
-/// if the chosen family name doesn't resolve (e.g. deleted since picked).
+/// user's chosen family + size, plus a separately-chosen family for inline
+/// code spans (same size as the body). Falls back to the system monospaced
+/// font if a chosen family name doesn't resolve (e.g. deleted since picked).
 struct EditorFontSet {
     let regular: NSFont
     let bold: NSFont
     let italic: NSFont
     let boldItalic: NSFont
+    let code: NSFont
 
-    init(fontName: String, fontSize: CGFloat) {
+    init(fontName: String, fontSize: CGFloat, codeFontName: String = FontPreferences.systemMonospacedSentinel) {
         let isSystemMonospaced = fontName == FontPreferences.systemMonospacedSentinel
         let base = isSystemMonospaced
             ? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
@@ -469,6 +718,10 @@ struct EditorFontSet {
 
         italic = NSFont(descriptor: base.fontDescriptor.withSymbolicTraits(.italic), size: fontSize) ?? base
         boldItalic = NSFont(descriptor: base.fontDescriptor.withSymbolicTraits([.bold, .italic]), size: fontSize) ?? bold
+
+        code = codeFontName == FontPreferences.systemMonospacedSentinel
+            ? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+            : (NSFont(name: codeFontName, size: fontSize) ?? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular))
     }
 }
 
