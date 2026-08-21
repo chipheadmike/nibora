@@ -27,10 +27,27 @@ final class AppLockManager: NSObject {
         NotificationCenter.default.removeObserver(self)
     }
 
+    var hasRecoveryCode: Bool { preferences.hasRecoveryCode }
+
     func unlock(with password: String) -> Bool {
         guard preferences.verifyPassword(password) else { return false }
         isLocked = false
         return true
+    }
+
+    func verifyRecoveryCode(_ code: String) -> Bool {
+        preferences.verifyRecoveryCode(code)
+    }
+
+    /// Finishes a recovery-code unlock: the old (forgotten) password is
+    /// replaced, the code is consumed so it can't be reused, and the app
+    /// unlocks. Recovery only ever ends here — verifying the code alone
+    /// isn't enough, since leaving the old, unremembered password in place
+    /// would just recreate the same lockout next time.
+    func completeRecovery(newPassword: String) {
+        preferences.setPassword(newPassword)
+        preferences.clearRecoveryCode()
+        isLocked = false
     }
 
     private func registerObservers() {
