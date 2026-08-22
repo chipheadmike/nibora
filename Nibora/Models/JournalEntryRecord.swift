@@ -30,6 +30,9 @@ final class JournalEntryRecord {
     /// index time (no "#"). Never edited directly — always derived from the
     /// body, same as excerpt/searchableBody.
     var tagsRaw: String = ""
+    /// On-device NLTagger sentiment score for the body, from -1 (negative)
+    /// to 1 (positive), computed at index time. Never edited directly.
+    var sentimentScore: Double = 0
 
     init(
         id: UUID,
@@ -44,7 +47,8 @@ final class JournalEntryRecord {
         excerpt: String,
         fileModificationDate: Date,
         searchableBody: String = "",
-        tagsRaw: String = ""
+        tagsRaw: String = "",
+        sentimentScore: Double = 0
     ) {
         self.id = id
         self.title = title
@@ -59,5 +63,6 @@ final class JournalEntryRecord {
         self.fileModificationDate = fileModificationDate
         self.searchableBody = searchableBody
         self.tagsRaw = tagsRaw
+        self.sentimentScore = sentimentScore
     }
 }
