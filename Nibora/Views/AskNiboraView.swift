@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import FoundationModels
 
 /// A single-question, single-answer window onto JournalQueryService — not a
 /// multi-turn chat, deliberately kept simple for a first pass.
@@ -93,6 +94,12 @@ struct AskNiboraView: View {
         Task {
             do {
                 answer = try await queryService.ask(trimmed, entries: entries)
+            } catch let error as LanguageModelSession.GenerationError {
+                if case .guardrailViolation = error {
+                    errorMessage = "The on-device model declined to answer — its built-in safety filter triggered even though this looks like an ordinary question. This is a known limitation of the current Apple Intelligence beta, not a Nibora issue, and there's no way to disable it from here. It should loosen up in future macOS updates; try rephrasing, or try again later."
+                } else {
+                    errorMessage = "Something went wrong answering that: \(error.localizedDescription)"
+                }
             } catch {
                 errorMessage = "Something went wrong answering that: \(error.localizedDescription)"
             }
