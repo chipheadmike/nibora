@@ -19,6 +19,8 @@ struct ContentView: View {
     @State private var searchText = ""
     @State private var isQuickSwitcherPresented = false
     @State private var isOnThisDayPresented = false
+    @State private var isJournalStatsPresented = false
+    @State private var isHelpPresented = false
 
     /// Live count of entries dated today, so the New Entry button can hide
     /// itself the moment today's entry exists — journals are one-per-day.
@@ -65,7 +67,7 @@ struct ContentView: View {
     private var content: some View {
         if let vaultURL = vaultManager.vaultURL {
             NavigationSplitView {
-                SidebarView(selection: $selection, vaultURL: vaultURL, sortMode: sortPreferences.mode, searchText: searchText)
+                SidebarView(selection: $selection, vaultURL: vaultURL, sortMode: sortPreferences.mode, sortDirection: sortPreferences.direction, searchText: searchText)
                     .navigationSplitViewColumnWidth(min: 220, ideal: 260)
                     .toolbar {
                         if !hasEntryForToday {
@@ -91,10 +93,29 @@ struct ContentView: View {
                                 }
                             }
                         }
+                        ToolbarItem {
+                            Button("Random Entry", systemImage: "shuffle") {
+                                selectRandomEntry()
+                            }
+                            .disabled(allEntriesForSwitcher.isEmpty)
+                        }
+                        ToolbarItem {
+                            Button("Journal Stats", systemImage: "chart.bar") {
+                                isJournalStatsPresented = true
+                            }
+                            .popover(isPresented: $isJournalStatsPresented) {
+                                JournalStatsView(stats: JournalStats.compute(from: allEntriesForSwitcher))
+                            }
+                        }
+                        ToolbarItem {
+                            Button("Guide", systemImage: "questionmark.circle") {
+                                isHelpPresented = true
+                            }
+                        }
                     }
             } detail: {
                 if let selection {
-                    EntryEditorView(entry: selection, vaultURL: vaultURL)
+                    EntryEditorView(entry: selection, vaultURL: vaultURL, onNavigateToEntry: navigateToEntry(titled:))
                 } else {
                     ContentUnavailableView("No Entry Selected", systemImage: "doc.text")
                 }
@@ -119,9 +140,35 @@ struct ContentView: View {
                     onDismiss: { isQuickSwitcherPresented = false }
                 )
             }
+            .sheet(isPresented: $isHelpPresented) {
+                HelpView()
+            }
         } else {
             VaultPickerView()
         }
+    }
+
+    /// Picks a random entry, favoring one different from the current
+    /// selection when there's more than one to choose from.
+    private func selectRandomEntry() {
+        guard !allEntriesForSwitcher.isEmpty else { return }
+        if allEntriesForSwitcher.count > 1, let selection {
+            let candidates = allEntriesForSwitcher.filter { $0.id != selection.id }
+            self.selection = candidates.randomElement()
+        } else {
+            selection = allEntriesForSwitcher.randomElement()
+        }
+    }
+
+    /// Resolves a "[[Title]]" wikilink click to an entry by exact
+    /// case-insensitive title match. Silently does nothing if no entry has
+    /// that title — the editor doesn't distinguish resolved from unresolved
+    /// wikilinks visually, so this is the only place that check happens.
+    private func navigateToEntry(titled title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard let match = allEntriesForSwitcher.first(where: { $0.title.localizedCaseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
+        selection = match
     }
 
     private func createEntry(in vaultURL: URL) {

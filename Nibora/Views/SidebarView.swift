@@ -10,6 +10,7 @@ struct SidebarView: View {
     @Binding var selection: JournalEntryRecord?
     let vaultURL: URL
     let sortMode: EntrySortMode
+    let sortDirection: EntrySortDirection
     let searchText: String
 
     @Environment(\.modelContext) private var modelContext
@@ -30,10 +31,11 @@ struct SidebarView: View {
     /// shifted under us (confirmed via a from-scratch build against the
     /// same source), so it's not something to keep depending on. Search is
     /// likewise a plain client-side filter, not a SwiftData predicate.
-    init(selection: Binding<JournalEntryRecord?>, vaultURL: URL, sortMode: EntrySortMode, searchText: String) {
+    init(selection: Binding<JournalEntryRecord?>, vaultURL: URL, sortMode: EntrySortMode, sortDirection: EntrySortDirection, searchText: String) {
         self._selection = selection
         self.vaultURL = vaultURL
         self.sortMode = sortMode
+        self.sortDirection = sortDirection
         self.searchText = searchText
 
         let secondarySort: SortDescriptor<JournalEntryRecord>
@@ -41,9 +43,9 @@ struct SidebarView: View {
         case .manual:
             secondarySort = SortDescriptor(\JournalEntryRecord.sortOrder)
         case .createdDate:
-            secondarySort = SortDescriptor(\JournalEntryRecord.createdAt)
+            secondarySort = SortDescriptor(\JournalEntryRecord.createdAt, order: sortDirection.sortOrder)
         case .modifiedDate:
-            secondarySort = SortDescriptor(\JournalEntryRecord.modifiedAt)
+            secondarySort = SortDescriptor(\JournalEntryRecord.modifiedAt, order: sortDirection.sortOrder)
         }
 
         _entries = Query(sort: [SortDescriptor(\JournalEntryRecord.monthKey, order: .reverse), secondarySort])
@@ -320,13 +322,19 @@ private struct EntryRow: View {
     }
 
     /// Normally just the cached excerpt (first ~120 characters of the
-    /// body). While searching, if the match isn't within that excerpt —
-    /// it's further into the body — shows a window of body text centered
-    /// on the match instead, so there's actually something to highlight.
+    /// body). While searching, always windows the shown text around the
+    /// match rather than just returning the excerpt as-is — with
+    /// `.lineLimit(1)` in a narrow sidebar column, a match sitting past
+    /// what fits on one visible line gets truncated away before it's ever
+    /// rendered, so the highlight attribute is technically there but never
+    /// seen. Centering the window on the match is what actually fixes that
+    /// (this was previously only done when the match fell outside the
+    /// excerpt entirely, which missed the common case of a match further
+    /// into an excerpt than the row's visible width).
     private func displaySnippet() -> String {
         guard !searchText.isEmpty else { return entry.excerpt }
-        if entry.excerpt.range(of: searchText, options: [.caseInsensitive, .diacriticInsensitive]) != nil {
-            return entry.excerpt
+        if let matchRange = entry.excerpt.range(of: searchText, options: [.caseInsensitive, .diacriticInsensitive]) {
+            return contextSnippet(from: entry.excerpt, around: matchRange)
         }
         guard let matchRange = entry.searchableBody.range(of: searchText, options: [.caseInsensitive, .diacriticInsensitive]) else {
             return entry.excerpt

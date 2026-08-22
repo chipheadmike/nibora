@@ -22,6 +22,7 @@ struct MarkdownTextView: NSViewRepresentable {
     let hotkeyPreferences: TimestampHotkeyPreferences
     let fontPreferences: FontPreferences
     let isFocusModeEnabled: Bool
+    let onWikilinkClick: (String) -> Void
 
     static let imageReferencePattern = try! NSRegularExpression(pattern: #"!\[[^\]]*\]\(([^)]+)\)"#)
     static let boldItalicAsteriskPattern = try! NSRegularExpression(pattern: #"\*\*\*([^*]+?)\*\*\*"#)
@@ -44,6 +45,112 @@ struct MarkdownTextView: NSViewRepresentable {
     /// it from ever matching a heading marker ("# Heading" has a space
     /// there), so tags and headings never fight over the same "#".
     static let tagPattern = try! NSRegularExpression(pattern: #"#[A-Za-z0-9][A-Za-z0-9_-]*"#)
+    /// "[[Entry Title]]" — a link to another entry by its title, distinct
+    /// from "[text](url)" web links (see applyLinks/applyWikilink below).
+    static let wikilinkPattern = try! NSRegularExpression(pattern: #"\[\[([^\]\n]+)\]\]"#)
+    static let wikilinkScheme = "nibora-wikilink"
+
+    /// Single combined pattern for MarkdownPreviewView's inline rendering —
+    /// alternation order matters: code/link/wikilink come first so their
+    /// delimiter characters (backtick, brackets) never get mis-read as
+    /// emphasis markers, matching how the editor's own applyInlineCode runs
+    /// last to "win" on overlaps. One numbered group per alternative, in
+    /// the same left-to-right order they appear below (used positionally
+    /// in inlineAttributedText, not by name).
+    static let previewInlinePattern = try! NSRegularExpression(pattern:
+        #"`([^`\n]+)`"# + "|" +
+        #"\[([^\]]+)\]\(([^)]+)\)"# + "|" +
+        #"\[\[([^\]\n]+)\]\]"# + "|" +
+        #"\*\*\*([^*]+?)\*\*\*"# + "|" +
+        #"___([^_]+?)___"# + "|" +
+        #"\*\*([^*]+?)\*\*"# + "|" +
+        #"__([^_]+?)__"# + "|" +
+        #"(?<!\*)\*([^*]+?)\*(?!\*)"# + "|" +
+        #"(?<!_)_([^_]+?)_(?!_)"# + "|" +
+        #"~~([^~\n]+?)~~"# + "|" +
+        #"==([^=\n]+?)=="# + "|" +
+        #"#[A-Za-z0-9][A-Za-z0-9_-]*"#
+    )
+
+    /// Renders one line's inline markdown into an NSAttributedString with
+    /// the markup delimiters actually removed — unlike applyMarkdownStyling
+    /// (which only ever adds attributes, never touches characters, since
+    /// that string is bound to what's written to disk), this is a
+    /// throwaway rendering built fresh from the current body text each
+    /// call and never fed back into the editable text. Single left-to-right
+    /// pass: no recursion into a matched span's own content, so e.g. a link
+    /// inside bold text won't itself render as a link — an accepted
+    /// simplification for a preview pane, not a full CommonMark renderer.
+    static func inlineAttributedText(from line: String, theme: ThemeManager, fonts: EditorFontSet) -> NSAttributedString {
+        let result = NSMutableAttributedString()
+        let nsLine = line as NSString
+        let baseAttributes: [NSAttributedString.Key: Any] = [.font: fonts.regular, .foregroundColor: NSColor(theme.bodyColor)]
+        var cursor = 0
+
+        func appendPlain(_ range: NSRange) {
+            guard range.length > 0 else { return }
+            result.append(NSAttributedString(string: nsLine.substring(with: range), attributes: baseAttributes))
+        }
+
+        func appendStyled(_ text: String, font: NSFont, color: Color) {
+            result.append(NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: NSColor(color)]))
+        }
+
+        for match in previewInlinePattern.matches(in: line, range: NSRange(location: 0, length: nsLine.length)) {
+            if match.range.location > cursor {
+                appendPlain(NSRange(location: cursor, length: match.range.location - cursor))
+            }
+
+            if match.range(at: 1).location != NSNotFound {
+                let content = nsLine.substring(with: match.range(at: 1))
+                result.append(NSAttributedString(string: content, attributes: [
+                    .font: fonts.code,
+                    .foregroundColor: NSColor(theme.codeColor),
+                    .backgroundColor: NSColor.textBackgroundColor.blended(withFraction: 0.08, of: .labelColor) ?? NSColor.textBackgroundColor
+                ]))
+            } else if match.range(at: 2).location != NSNotFound {
+                let text = nsLine.substring(with: match.range(at: 2))
+                let urlString = nsLine.substring(with: match.range(at: 3))
+                var attrs: [NSAttributedString.Key: Any] = [.font: fonts.regular, .foregroundColor: NSColor(theme.linkColor), .underlineStyle: NSUnderlineStyle.single.rawValue]
+                if let url = URL(string: urlString) { attrs[.link] = url }
+                result.append(NSAttributedString(string: text, attributes: attrs))
+            } else if match.range(at: 4).location != NSNotFound {
+                let titleText = nsLine.substring(with: match.range(at: 4))
+                var attrs: [NSAttributedString.Key: Any] = [.font: fonts.regular, .foregroundColor: NSColor(theme.wikilinkColor), .underlineStyle: NSUnderlineStyle.single.rawValue]
+                if let encoded = titleText.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+                   let url = URL(string: "\(wikilinkScheme):///\(encoded)") {
+                    attrs[.link] = url
+                }
+                result.append(NSAttributedString(string: titleText, attributes: attrs))
+            } else if match.range(at: 5).location != NSNotFound {
+                appendStyled(nsLine.substring(with: match.range(at: 5)), font: fonts.boldItalic, color: theme.boldColor)
+            } else if match.range(at: 6).location != NSNotFound {
+                appendStyled(nsLine.substring(with: match.range(at: 6)), font: fonts.boldItalic, color: theme.boldColor)
+            } else if match.range(at: 7).location != NSNotFound {
+                appendStyled(nsLine.substring(with: match.range(at: 7)), font: fonts.bold, color: theme.boldColor)
+            } else if match.range(at: 8).location != NSNotFound {
+                appendStyled(nsLine.substring(with: match.range(at: 8)), font: fonts.bold, color: theme.boldColor)
+            } else if match.range(at: 9).location != NSNotFound {
+                appendStyled(nsLine.substring(with: match.range(at: 9)), font: fonts.italic, color: theme.italicColor)
+            } else if match.range(at: 10).location != NSNotFound {
+                appendStyled(nsLine.substring(with: match.range(at: 10)), font: fonts.italic, color: theme.italicColor)
+            } else if match.range(at: 11).location != NSNotFound {
+                let content = nsLine.substring(with: match.range(at: 11))
+                result.append(NSAttributedString(string: content, attributes: [.font: fonts.regular, .foregroundColor: NSColor(theme.strikethroughColor), .strikethroughStyle: NSUnderlineStyle.single.rawValue]))
+            } else if match.range(at: 12).location != NSNotFound {
+                let content = nsLine.substring(with: match.range(at: 12))
+                result.append(NSAttributedString(string: content, attributes: [.font: fonts.regular, .foregroundColor: NSColor(theme.bodyColor), .backgroundColor: NSColor(theme.highlightColor)]))
+            } else {
+                let content = nsLine.substring(with: match.range)
+                result.append(NSAttributedString(string: content, attributes: [.font: fonts.bold, .foregroundColor: NSColor(theme.tagColor)]))
+            }
+
+            cursor = match.range.location + match.range.length
+        }
+
+        appendPlain(NSRange(location: cursor, length: nsLine.length - cursor))
+        return result
+    }
 
     func makeNSView(context: Context) -> NSScrollView {
         let textView = DropHandlingTextView()
@@ -91,11 +198,12 @@ struct MarkdownTextView: NSViewRepresentable {
             textView.string = text
         }
         context.coordinator.isFocusModeEnabled = isFocusModeEnabled
+        context.coordinator.onWikilinkClick = onWikilinkClick
         Self.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled)
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled)
+        Coordinator(text: $text, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, onWikilinkClick: onWikilinkClick)
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
@@ -103,12 +211,14 @@ struct MarkdownTextView: NSViewRepresentable {
         var theme: ThemeManager
         var fontPreferences: FontPreferences
         var isFocusModeEnabled: Bool
+        var onWikilinkClick: (String) -> Void
 
-        init(text: Binding<String>, theme: ThemeManager, fontPreferences: FontPreferences, isFocusModeEnabled: Bool) {
+        init(text: Binding<String>, theme: ThemeManager, fontPreferences: FontPreferences, isFocusModeEnabled: Bool, onWikilinkClick: @escaping (String) -> Void) {
             self.text = text
             self.theme = theme
             self.fontPreferences = fontPreferences
             self.isFocusModeEnabled = isFocusModeEnabled
+            self.onWikilinkClick = onWikilinkClick
         }
 
         func textDidChange(_ notification: Notification) {
@@ -137,16 +247,25 @@ struct MarkdownTextView: NSViewRepresentable {
             return MarkdownTextView.handleListContinuation(in: textView)
         }
 
-        /// Task list checkboxes are tagged with a private `nibora-checkbox://`
-        /// `.link` attribute (see applyTaskListCheckbox) so they piggyback on
+        /// Task list checkboxes and entry wikilinks are both tagged with a
+        /// private `.link` attribute (nibora-checkbox:// / nibora-wikilink://
+        /// — see applyTaskListCheckbox/applyWikilink) so they piggyback on
         /// NSTextView's native Cmd+Click-on-link handling — the only
         /// click-driven interaction that's proven reliable this beta.
         /// Real markdown links (http/https) fall through to the default
         /// open-in-browser behavior by returning false.
         func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
-            guard let url = link as? URL, url.scheme == MarkdownTextView.taskListToggleScheme else { return false }
-            MarkdownTextView.toggleTaskListCheckbox(in: textView, at: charIndex)
-            return true
+            guard let url = link as? URL else { return false }
+            if url.scheme == MarkdownTextView.taskListToggleScheme {
+                MarkdownTextView.toggleTaskListCheckbox(in: textView, at: charIndex)
+                return true
+            }
+            if url.scheme == MarkdownTextView.wikilinkScheme {
+                let rawTitle = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
+                onWikilinkClick(rawTitle.removingPercentEncoding ?? rawTitle)
+                return true
+            }
+            return false
         }
     }
 
@@ -242,6 +361,7 @@ struct MarkdownTextView: NSViewRepresentable {
             applyTag(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
             applyEmphasis(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
             applyLinks(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
+            applyWikilink(in: textStorage, line: line, lineRange: lineRange, theme: theme)
             // Applied last so code spans win over any overlapping bold/italic/
             // link styling within backticks, matching standard markdown
             // semantics (code content isn't further interpreted as markup).
@@ -360,6 +480,30 @@ struct MarkdownTextView: NSViewRepresentable {
             let mutedFont = NSFont(descriptor: fonts.regular.fontDescriptor, size: fonts.regular.pointSize * 0.75) ?? fonts.regular
             textStorage.addAttribute(.font, value: mutedFont, range: globalMetadataRange)
             textStorage.addAttribute(.foregroundColor, value: NSColor.tertiaryLabelColor, range: globalMetadataRange)
+        }
+    }
+
+    /// Colors and underlines a "[[Entry Title]]" span and tags it with a
+    /// `.link` attribute using a private `nibora-wikilink://` scheme — same
+    /// Cmd+Click-routing trick as the task checkboxes, so clicking jumps to
+    /// the matching entry via Coordinator.clickedOnLink rather than opening
+    /// a URL. Styling doesn't check whether the title actually resolves to
+    /// an entry (that lookup happens one layer up, in ContentView, where
+    /// the full entry list already lives) — an unresolved link just no-ops
+    /// when clicked rather than looking visually different.
+    private static func applyWikilink(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager) {
+        let nsLine = line as NSString
+        for match in wikilinkPattern.matches(in: line, range: NSRange(location: 0, length: nsLine.length)) {
+            let globalRange = NSRange(location: lineRange.location + match.range.location, length: match.range.length)
+            let title = nsLine.substring(with: match.range(at: 1))
+
+            textStorage.addAttribute(.foregroundColor, value: NSColor(theme.wikilinkColor), range: globalRange)
+            textStorage.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: globalRange)
+
+            guard let encodedTitle = title.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+                  let url = URL(string: "\(wikilinkScheme):///\(encodedTitle)") else { continue }
+            textStorage.addAttribute(.link, value: url, range: globalRange)
+            textStorage.addAttribute(.cursor, value: NSCursor.pointingHand, range: globalRange)
         }
     }
 
@@ -538,7 +682,10 @@ struct MarkdownTextView: NSViewRepresentable {
         apply(italicUnderscorePattern, font: fonts.italic, color: theme.italicColor)
     }
 
-    private static func headingLevel(of line: String) -> Int? {
+    /// Not private — reused by MarkdownPreviewView for its own line
+    /// classification, so heading detection stays defined in exactly one
+    /// place instead of drifting between the editor and the preview.
+    static func headingLevel(of line: String) -> Int? {
         var level = 0
         for character in line {
             if character == "#" {
@@ -643,8 +790,19 @@ final class DropHandlingTextView: NSTextView {
         let linkText = nsString.substring(with: NSRange(location: openIndex + 1, length: cursorLocation - openIndex - 2))
         guard !linkText.isEmpty else { return }
         guard !isTaskListCheckboxBracket(nsString: nsString, openIndex: openIndex, bracketContent: linkText) else { return }
+        guard !isWikilinkBracket(nsString: nsString, openIndex: openIndex) else { return }
 
         showLinkPopover(for: bracketRange, linkText: linkText)
+    }
+
+    /// "[[Title]]" (an entry wikilink) also looks like the link popover's
+    /// "[text]" trigger the instant its inner "]" is typed — the character
+    /// immediately before the opening "[" is itself "[" only when it's the
+    /// inner bracket of a wikilink's double brackets, which is what
+    /// distinguishes the two cases.
+    private func isWikilinkBracket(nsString: NSString, openIndex: Int) -> Bool {
+        guard openIndex > 0 else { return false }
+        return nsString.substring(with: NSRange(location: openIndex - 1, length: 1)) == "["
     }
 
     /// "- [ ]" and "- [x]" (task list checkboxes) look identical to the link

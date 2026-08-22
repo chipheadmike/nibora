@@ -6,10 +6,12 @@
 import SwiftUI
 import SwiftData
 import AppKit
+import UniformTypeIdentifiers
 
 struct EntryEditorView: View {
     let entry: JournalEntryRecord
     let vaultURL: URL
+    let onNavigateToEntry: (String) -> Void
 
     @Environment(\.modelContext) private var modelContext
     @Environment(ThemeManager.self) private var themeManager
@@ -21,6 +23,7 @@ struct EntryEditorView: View {
     @State private var saveTask: Task<Void, Never>?
     @State private var isLoaded = false
     @State private var isFocusModeEnabled = false
+    @State private var isPreviewEnabled = false
 
     private var fileURL: URL {
         vaultURL.appendingPathComponent(entry.relativePath)
@@ -41,16 +44,30 @@ struct EntryEditorView: View {
             Divider()
                 .padding(.top, 8)
 
-            MarkdownTextView(
-                text: $bodyText,
-                baseDirectory: fileURL.deletingLastPathComponent(),
-                saveImage: saveDroppedImage,
-                theme: themeManager,
-                hotkeyPreferences: hotkeyPreferences,
-                fontPreferences: fontPreferences,
-                isFocusModeEnabled: isFocusModeEnabled
-            )
-            .onChange(of: bodyText) { scheduleSave() }
+            HStack(spacing: 0) {
+                MarkdownTextView(
+                    text: $bodyText,
+                    baseDirectory: fileURL.deletingLastPathComponent(),
+                    saveImage: saveDroppedImage,
+                    theme: themeManager,
+                    hotkeyPreferences: hotkeyPreferences,
+                    fontPreferences: fontPreferences,
+                    isFocusModeEnabled: isFocusModeEnabled,
+                    onWikilinkClick: onNavigateToEntry
+                )
+                .onChange(of: bodyText) { scheduleSave() }
+
+                if isPreviewEnabled {
+                    Divider()
+                    MarkdownPreviewView(
+                        markdownText: bodyText,
+                        theme: themeManager,
+                        fontPreferences: fontPreferences,
+                        onWikilinkClick: onNavigateToEntry
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+            }
 
             AttachmentsStripView(text: bodyText, baseDirectory: fileURL.deletingLastPathComponent())
 
@@ -79,6 +96,19 @@ struct EntryEditorView: View {
                     Image(systemName: isFocusModeEnabled ? "eye.fill" : "eye")
                 }
                 .help(isFocusModeEnabled ? "Turn Off Focus Mode" : "Turn On Focus Mode")
+            }
+            ToolbarItem {
+                Button {
+                    isPreviewEnabled.toggle()
+                } label: {
+                    Image(systemName: isPreviewEnabled ? "rectangle.split.2x1.fill" : "rectangle.split.2x1")
+                }
+                .help(isPreviewEnabled ? "Hide Preview" : "Show Preview")
+            }
+            ToolbarItem {
+                Button("Export to PDF", systemImage: "square.and.arrow.up") {
+                    exportToPDF()
+                }
             }
         }
     }
@@ -118,6 +148,14 @@ struct EntryEditorView: View {
 
         try? EntryFileWriter.write(frontmatter: frontmatter, body: bodyText, to: fileURL)
         EntryIndexer(modelContext: modelContext).reindexSingleFile(at: fileURL, vaultURL: vaultURL)
+    }
+
+    private func exportToPDF() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.nameFieldStringValue = title.isEmpty ? "Entry" : title
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        EntryPDFExporter.export(title: title, body: bodyText, theme: themeManager, fontPreferences: fontPreferences, to: url)
     }
 
     private func saveDroppedImage(_ image: NSImage, suggestedName: String?) -> String? {
