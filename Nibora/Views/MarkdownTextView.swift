@@ -81,6 +81,24 @@ struct MarkdownTextView: NSViewRepresentable {
     /// pass: no recursion into a matched span's own content, so e.g. a link
     /// inside bold text won't itself render as a link — an accepted
     /// simplification for a preview pane, not a full CommonMark renderer.
+    /// Just the human-readable text a previewInlinePattern match
+    /// represents — markers stripped, no styling. Shared by
+    /// inlineAttributedText (which additionally styles it per branch) and
+    /// any plain-text consumer, e.g. SpeechTextConverter, so both agree on
+    /// what a given span "says" without duplicating the group-index
+    /// dispatch twice.
+    static func inlineMatchText(_ match: NSTextCheckingResult, in nsLine: NSString) -> String {
+        for groupIndex in 1...12 {
+            let range = match.range(at: groupIndex)
+            if range.location != NSNotFound {
+                return nsLine.substring(with: range)
+            }
+        }
+        // No group matched: this was the tag alternative, which has no
+        // capture group — use the whole match, minus the leading "#".
+        return String(nsLine.substring(with: match.range).dropFirst())
+    }
+
     static func inlineAttributedText(from line: String, theme: ThemeManager, fonts: EditorFontSet) -> NSAttributedString {
         let result = NSMutableAttributedString()
         let nsLine = line as NSString

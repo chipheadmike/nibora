@@ -6,6 +6,7 @@
 import SwiftUI
 import SwiftData
 import AppKit
+import AVFoundation
 
 struct SettingsView: View {
     var body: some View {
@@ -92,9 +93,13 @@ private struct GeneralSettingsTab: View {
 private struct EditorSettingsTab: View {
     @Environment(FontPreferences.self) private var fontPreferences
     @Environment(TimestampHotkeyPreferences.self) private var hotkeyPreferences
+    @Environment(SpeechVoicePreferences.self) private var speechVoicePreferences
+
+    @State private var previewReader = SpeechReader()
 
     var body: some View {
         @Bindable var fontPreferences = fontPreferences
+        @Bindable var speechVoicePreferences = speechVoicePreferences
 
         Form {
             Section("Font") {
@@ -118,10 +123,54 @@ private struct EditorSettingsTab: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Read Aloud") {
+                Picker("Voice", selection: Binding(
+                    get: { speechVoicePreferences.voiceIdentifier ?? "" },
+                    set: { speechVoicePreferences.voiceIdentifier = $0.isEmpty ? nil : $0 }
+                )) {
+                    Text("System Default").tag("")
+                    ForEach(SpeechVoicePreferences.availableVoices, id: \.identifier) { voice in
+                        Text("\(voice.name) (\(voice.language))").tag(voice.identifier)
+                    }
+                }
+                Text("Used when reading an entry aloud from the toolbar. Markdown syntax is stripped first, so headings, links, and list markers are spoken as clean prose.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                VStack(alignment: .leading) {
+                    Text("Rate: \(String(format: "%.2f", speechVoicePreferences.rate))")
+                    Slider(value: $speechVoicePreferences.rate, in: SpeechVoicePreferences.rateRange)
+                }
+                VStack(alignment: .leading) {
+                    Text("Pitch: \(String(format: "%.2f", speechVoicePreferences.pitch))")
+                    Slider(value: $speechVoicePreferences.pitch, in: SpeechVoicePreferences.pitchRange)
+                }
+
+                HStack {
+                    Button(previewReader.isSpeaking ? "Stop" : "Preview Voice") {
+                        if previewReader.isSpeaking {
+                            previewReader.stop()
+                        } else {
+                            previewReader.speak(
+                                "This is a preview of the current voice, rate, and pitch settings.",
+                                voiceIdentifier: speechVoicePreferences.voiceIdentifier,
+                                rate: Float(speechVoicePreferences.rate),
+                                pitch: Float(speechVoicePreferences.pitch)
+                            )
+                        }
+                    }
+                    Button("Reset to Defaults") {
+                        speechVoicePreferences.resetRateAndPitch()
+                    }
+                }
+            }
         }
         .formStyle(.grouped)
         .frame(width: 440)
         .fixedSize(horizontal: false, vertical: true)
+        .onDisappear {
+            previewReader.stop()
+        }
     }
 }
 
@@ -443,6 +492,7 @@ private struct RecoveryCodeRevealView: View {
         .environment(FontPreferences())
         .environment(JournalTitlePreferences())
         .environment(EntryTemplatePreferences())
+        .environment(SpeechVoicePreferences())
         .environment(PasswordLockPreferences())
         .environment(AppLockManager(preferences: PasswordLockPreferences()))
         .modelContainer(for: JournalEntryRecord.self, inMemory: true)
