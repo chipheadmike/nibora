@@ -18,6 +18,7 @@ struct EntryEditorView: View {
     @Environment(ThemeManager.self) private var themeManager
     @Environment(TimestampHotkeyPreferences.self) private var hotkeyPreferences
     @Environment(FontPreferences.self) private var fontPreferences
+    @Environment(SpeechVoicePreferences.self) private var speechVoicePreferences
 
     @State private var title: String = ""
     @State private var bodyText: String = ""
@@ -26,6 +27,7 @@ struct EntryEditorView: View {
     @State private var isFocusModeEnabled = false
     @State private var isPreviewEnabled = false
     @State private var isHistoryPresented = false
+    @State private var speechReader = SpeechReader()
 
     private var fileURL: URL {
         vaultURL.appendingPathComponent(entry.relativePath)
@@ -111,8 +113,17 @@ struct EntryEditorView: View {
         .onDisappear {
             saveTask?.cancel()
             saveNow()
+            speechReader.stop()
         }
         .toolbar {
+            ToolbarItem {
+                Button {
+                    toggleReadAloud()
+                } label: {
+                    Image(systemName: speechReader.isSpeaking ? "stop.fill" : "speaker.wave.2")
+                }
+                .help(speechReader.isSpeaking ? "Stop Reading" : "Read Entry Aloud")
+            }
             ToolbarItem {
                 Button {
                     isFocusModeEnabled.toggle()
@@ -148,6 +159,7 @@ struct EntryEditorView: View {
     }
 
     private func load() {
+        speechReader.stop()
         isLoaded = false
         title = entry.title
         if let contents = try? String(contentsOf: fileURL, encoding: .utf8) {
@@ -183,6 +195,21 @@ struct EntryEditorView: View {
 
         try? EntryFileWriter.write(frontmatter: frontmatter, body: bodyText, to: fileURL)
         EntryIndexer(modelContext: modelContext).reindexSingleFile(at: fileURL, vaultURL: vaultURL)
+    }
+
+    private func toggleReadAloud() {
+        if speechReader.isSpeaking {
+            speechReader.stop()
+            return
+        }
+        let spokenBody = SpeechTextConverter.plainText(from: bodyText)
+        let fullText = title.isEmpty ? spokenBody : "\(title). \(spokenBody)"
+        speechReader.speak(
+            fullText,
+            voiceIdentifier: speechVoicePreferences.voiceIdentifier,
+            rate: Float(speechVoicePreferences.rate),
+            pitch: Float(speechVoicePreferences.pitch)
+        )
     }
 
     private func exportToPDF() {

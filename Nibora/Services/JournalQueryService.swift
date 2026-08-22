@@ -31,11 +31,14 @@ final class JournalQueryService {
     /// rather than everything — the on-device model's context window is
     /// limited, and this is a much closer approximation of "search my
     /// journal" than either dumping the whole vault in or only looking at
-    /// recent entries.
+    /// recent entries. Kept deliberately small (5 excerpts, 400 chars each)
+    /// since a smaller payload is also somewhat less likely to trip the
+    /// model's on-device safety guardrail, which has been observed
+    /// triggering on entirely ordinary journal content in this beta.
     func ask(_ question: String, entries: [JournalEntryRecord]) async throws -> String {
-        let relevant = Self.relevantEntries(for: question, in: entries, limit: 8)
+        let relevant = Self.relevantEntries(for: question, in: entries, limit: 5)
         let context = relevant.map { entry in
-            "[\(Self.dateFormatter.string(from: entry.date))] \(entry.title): \(entry.searchableBody.prefix(600))"
+            "[\(Self.dateFormatter.string(from: entry.date))] \(entry.title): \(entry.searchableBody.prefix(400))"
         }.joined(separator: "\n\n")
 
         let instructions = """
@@ -47,8 +50,22 @@ final class JournalQueryService {
         """
 
         let session = LanguageModelSession(instructions: instructions)
-        let response = try await session.respond(to: question)
-        return response.content
+        do {
+            let response = try await session.respond(to: question)
+            return response.content
+        } catch let error as LanguageModelSession.GenerationError {
+            if case .guardrailViolation = error {
+                // The guardrail can trip on the injected journal content
+                // rather than the question itself — retry once with no
+                // journal context at all, so a genuinely ordinary question
+                // still gets some answer instead of a dead end.
+                let bareSession = LanguageModelSession()
+                if let bareResponse = try? await bareSession.respond(to: question) {
+                    return bareResponse.content + "\n\n(Answered without journal context — including your journal excerpts triggered the on-device model's safety filter this time.)"
+                }
+            }
+            throw error
+        }
     }
 
     private static func relevantEntries(for question: String, in entries: [JournalEntryRecord], limit: Int) -> [JournalEntryRecord] {
