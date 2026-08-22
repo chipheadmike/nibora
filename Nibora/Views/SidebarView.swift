@@ -186,6 +186,7 @@ struct SidebarView: View {
             selection = nil
         }
 
+        SpotlightIndexer.remove(id: entry.id)
         modelContext.delete(entry)
         try? modelContext.save()
     }

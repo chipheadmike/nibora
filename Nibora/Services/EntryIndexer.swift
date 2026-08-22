@@ -78,6 +78,7 @@ final class EntryIndexer {
         let tagsRaw = Self.extractTags(from: parsed.body)
         let sentimentScore = SentimentAnalyzer.score(for: parsed.body)
 
+        let record: JournalEntryRecord
         if let existing {
             existing.title = frontmatter.title
             existing.date = frontmatter.date
@@ -91,8 +92,9 @@ final class EntryIndexer {
             existing.searchableBody = parsed.body
             existing.tagsRaw = tagsRaw
             existing.sentimentScore = sentimentScore
+            record = existing
         } else {
-            let record = JournalEntryRecord(
+            let newRecord = JournalEntryRecord(
                 id: frontmatter.id,
                 title: frontmatter.title,
                 date: frontmatter.date,
@@ -108,10 +110,12 @@ final class EntryIndexer {
                 tagsRaw: tagsRaw,
                 sentimentScore: sentimentScore
             )
-            modelContext.insert(record)
+            modelContext.insert(newRecord)
+            record = newRecord
         }
 
         try? modelContext.save()
+        SpotlightIndexer.index(record)
     }
 
     /// Reuses the editor's own "#tag" pattern (MarkdownTextView.tagPattern)
@@ -131,6 +135,7 @@ final class EntryIndexer {
     private func pruneMissingEntries(keeping seenRelativePaths: Set<String>) {
         guard let allRecords = try? modelContext.fetch(FetchDescriptor<JournalEntryRecord>()) else { return }
         for record in allRecords where !seenRelativePaths.contains(record.relativePath) {
+            SpotlightIndexer.remove(id: record.id)
             modelContext.delete(record)
         }
     }
