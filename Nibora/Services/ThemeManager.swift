@@ -28,6 +28,7 @@ final class ThemeManager {
     var blockquoteColor: Color { didSet { persist(blockquoteColor, forKey: Keys.blockquote) } }
     var horizontalRuleColor: Color { didSet { persist(horizontalRuleColor, forKey: Keys.horizontalRule) } }
     var tagColor: Color { didSet { persist(tagColor, forKey: Keys.tag) } }
+    var wikilinkColor: Color { didSet { persist(wikilinkColor, forKey: Keys.wikilink) } }
 
     private enum Keys {
         static let body = "theme.bodyColor"
@@ -46,6 +47,7 @@ final class ThemeManager {
         static let blockquote = "theme.blockquoteColor"
         static let horizontalRule = "theme.horizontalRuleColor"
         static let tag = "theme.tagColor"
+        static let wikilink = "theme.wikilinkColor"
     }
 
     private static let defaultBody = Color.primary
@@ -66,6 +68,7 @@ final class ThemeManager {
     private static let defaultBlockquote = Color(red: 0.45, green: 0.50, blue: 0.58)
     private static let defaultHorizontalRule = Color(red: 0.55, green: 0.55, blue: 0.55)
     private static let defaultTag = Color(red: 0.30, green: 0.62, blue: 0.55)
+    private static let defaultWikilink = Color(red: 0.58, green: 0.40, blue: 0.80)
 
     init() {
         bodyColor = Self.load(Keys.body) ?? Self.defaultBody
@@ -84,6 +87,7 @@ final class ThemeManager {
         blockquoteColor = Self.load(Keys.blockquote) ?? Self.defaultBlockquote
         horizontalRuleColor = Self.load(Keys.horizontalRule) ?? Self.defaultHorizontalRule
         tagColor = Self.load(Keys.tag) ?? Self.defaultTag
+        wikilinkColor = Self.load(Keys.wikilink) ?? Self.defaultWikilink
     }
 
     func color(forHeadingLevel level: Int) -> Color {
@@ -114,6 +118,7 @@ final class ThemeManager {
         blockquoteColor = Self.defaultBlockquote
         horizontalRuleColor = Self.defaultHorizontalRule
         tagColor = Self.defaultTag
+        wikilinkColor = Self.defaultWikilink
     }
 
     private static func load(_ key: String) -> Color? {
