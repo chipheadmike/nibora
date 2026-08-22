@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 struct EntryEditorView: View {
     let entry: JournalEntryRecord
     let vaultURL: URL
+    let allEntries: [JournalEntryRecord]
     let onNavigateToEntry: (String) -> Void
 
     @Environment(\.modelContext) private var modelContext
@@ -24,6 +25,7 @@ struct EntryEditorView: View {
     @State private var isLoaded = false
     @State private var isFocusModeEnabled = false
     @State private var isPreviewEnabled = false
+    @State private var isHistoryPresented = false
 
     private var fileURL: URL {
         vaultURL.appendingPathComponent(entry.relativePath)
@@ -31,6 +33,24 @@ struct EntryEditorView: View {
 
     private var wordCount: Int {
         bodyText.split(whereSeparator: \.isWhitespace).count
+    }
+
+    /// Other entries whose body contains a "[[Title]]" matching this
+    /// entry's title, case-insensitively. Reuses MarkdownTextView's own
+    /// wikilinkPattern so a string only ever counts as a link in one place.
+    private var backlinkEntries: [JournalEntryRecord] {
+        let titleLower = entry.title.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !titleLower.isEmpty else { return [] }
+        return allEntries.filter { candidate in
+            guard candidate.id != entry.id else { return false }
+            return wikilinkTitles(in: candidate.searchableBody).contains(titleLower)
+        }
+    }
+
+    private func wikilinkTitles(in body: String) -> Set<String> {
+        let nsBody = body as NSString
+        let matches = MarkdownTextView.wikilinkPattern.matches(in: body, range: NSRange(location: 0, length: nsBody.length))
+        return Set(matches.map { nsBody.substring(with: $0.range(at: 1)).trimmingCharacters(in: .whitespaces).lowercased() })
     }
 
     var body: some View {
@@ -71,6 +91,10 @@ struct EntryEditorView: View {
 
             AttachmentsStripView(text: bodyText, baseDirectory: fileURL.deletingLastPathComponent())
 
+            BacklinksView(entries: backlinkEntries) { linkedEntry in
+                onNavigateToEntry(linkedEntry.title)
+            }
+
             Divider()
             HStack {
                 Spacer()
@@ -110,6 +134,16 @@ struct EntryEditorView: View {
                     exportToPDF()
                 }
             }
+            ToolbarItem {
+                Button("Version History", systemImage: "clock.arrow.circlepath") {
+                    isHistoryPresented = true
+                }
+                .popover(isPresented: $isHistoryPresented) {
+                    EntryHistoryView(fileURL: fileURL) { restoredBody in
+                        bodyText = restoredBody
+                    }
+                }
+            }
         }
     }
 
@@ -136,6 +170,7 @@ struct EntryEditorView: View {
 
     private func saveNow() {
         guard isLoaded else { return }
+        EntryHistoryService.snapshotIfNeeded(fileURL: fileURL)
         let frontmatter = EntryFrontmatter(
             id: entry.id,
             title: title,

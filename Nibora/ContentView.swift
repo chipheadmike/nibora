@@ -21,6 +21,8 @@ struct ContentView: View {
     @State private var isOnThisDayPresented = false
     @State private var isJournalStatsPresented = false
     @State private var isHelpPresented = false
+    @State private var isGraphPresented = false
+    @State private var isAskNiboraPresented = false
 
     /// Live count of entries dated today, so the New Entry button can hide
     /// itself the moment today's entry exists — journals are one-per-day.
@@ -108,6 +110,16 @@ struct ContentView: View {
                             }
                         }
                         ToolbarItem {
+                            Button("Entry Graph", systemImage: "point.3.connected.trianglepath.dotted") {
+                                isGraphPresented = true
+                            }
+                        }
+                        ToolbarItem {
+                            Button("Ask Nibora", systemImage: "sparkles") {
+                                isAskNiboraPresented = true
+                            }
+                        }
+                        ToolbarItem {
                             Button("Guide", systemImage: "questionmark.circle") {
                                 isHelpPresented = true
                             }
@@ -115,7 +127,7 @@ struct ContentView: View {
                     }
             } detail: {
                 if let selection {
-                    EntryEditorView(entry: selection, vaultURL: vaultURL, onNavigateToEntry: navigateToEntry(titled:))
+                    EntryEditorView(entry: selection, vaultURL: vaultURL, allEntries: allEntriesForSwitcher, onNavigateToEntry: navigateToEntry(titled:))
                 } else {
                     ContentUnavailableView("No Entry Selected", systemImage: "doc.text")
                 }
@@ -142,6 +154,14 @@ struct ContentView: View {
             }
             .sheet(isPresented: $isHelpPresented) {
                 HelpView()
+            }
+            .sheet(isPresented: $isGraphPresented) {
+                EntryGraphView(entries: allEntriesForSwitcher) { entry in
+                    selection = entry
+                }
+            }
+            .sheet(isPresented: $isAskNiboraPresented) {
+                AskNiboraView(entries: allEntriesForSwitcher)
             }
         } else {
             VaultPickerView()

@@ -9,8 +9,8 @@ import AppKit
 /// Small control for recording a single keyboard shortcut: shows the
 /// current combo, and while "Record…" is active, captures the next keyDown
 /// via a local event monitor (scoped only to the recording session).
-struct ShortcutRecorderView: View {
-    @Bindable var preferences: TimestampHotkeyPreferences
+struct ShortcutRecorderView<Preferences: HotkeyPreferences>: View {
+    @Bindable var preferences: Preferences
 
     @State private var isRecording = false
     @State private var monitor: Any?
