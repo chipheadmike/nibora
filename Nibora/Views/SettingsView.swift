@@ -117,6 +117,7 @@ private struct EditorSettingsTab: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
         }
         .formStyle(.grouped)
         .frame(width: 440)

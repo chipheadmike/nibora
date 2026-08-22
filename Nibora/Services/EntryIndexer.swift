@@ -76,6 +76,7 @@ final class EntryIndexer {
         let monthKey = EntryFileWriter.monthKey(for: frontmatter.date)
         let excerpt = String(parsed.body.prefix(120))
         let tagsRaw = Self.extractTags(from: parsed.body)
+        let sentimentScore = SentimentAnalyzer.score(for: parsed.body)
 
         if let existing {
             existing.title = frontmatter.title
@@ -89,6 +90,7 @@ final class EntryIndexer {
             existing.fileModificationDate = modificationDate
             existing.searchableBody = parsed.body
             existing.tagsRaw = tagsRaw
+            existing.sentimentScore = sentimentScore
         } else {
             let record = JournalEntryRecord(
                 id: frontmatter.id,
@@ -103,7 +105,8 @@ final class EntryIndexer {
                 excerpt: excerpt,
                 fileModificationDate: modificationDate,
                 searchableBody: parsed.body,
-                tagsRaw: tagsRaw
+                tagsRaw: tagsRaw,
+                sentimentScore: sentimentScore
             )
             modelContext.insert(record)
         }
