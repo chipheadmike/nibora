@@ -14,7 +14,9 @@ struct LockScreenView: View {
 
     private enum Mode {
         case password
+        case recoveryChoice
         case recoveryCode
+        case temporaryCode
         case newPassword
     }
 
@@ -24,6 +26,10 @@ struct LockScreenView: View {
     @State private var newPassword = ""
     @State private var confirmPassword = ""
     @State private var errorMessage: String?
+    /// Tracks which path produced the code being verified, so finishRecovery
+    /// clears the right one (saved recovery code vs. emailed temporary code)
+    /// without the two interfering with each other.
+    @State private var recoveryUsedTemporaryCode = false
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -35,7 +41,9 @@ struct LockScreenView: View {
             Group {
                 switch mode {
                 case .password: passwordContent
+                case .recoveryChoice: recoveryChoiceContent
                 case .recoveryCode: recoveryCodeContent
+                case .temporaryCode: temporaryCodeContent
                 case .newPassword: newPasswordContent
                 }
             }
@@ -72,15 +80,108 @@ struct LockScreenView: View {
             .buttonStyle(.borderedProminent)
             .disabled(password.isEmpty)
 
-            if lockManager.hasRecoveryCode {
+            if lockManager.hasRecoveryCode || lockManager.hasRecoveryEmail {
                 Button("Forgot password?") {
                     errorMessage = nil
                     password = ""
-                    mode = .recoveryCode
+                    if lockManager.hasRecoveryCode && lockManager.hasRecoveryEmail {
+                        mode = .recoveryChoice
+                    } else if lockManager.hasRecoveryCode {
+                        mode = .recoveryCode
+                    } else {
+                        sendTemporaryCode()
+                    }
                 }
                 .buttonStyle(.link)
                 .font(.caption)
             }
+        }
+    }
+
+    private var recoveryChoiceContent: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "questionmark.circle.fill")
+                .font(.system(size: 40))
+                .foregroundStyle(.secondary)
+
+            Text("Forgot Your Password?")
+                .font(.title2.bold())
+
+            Text("Choose how you'd like to recover access.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            Button("Enter Recovery Code") {
+                errorMessage = nil
+                mode = .recoveryCode
+            }
+            .buttonStyle(.borderedProminent)
+
+            Button("Email Me a Temporary Code") {
+                sendTemporaryCode()
+            }
+            .buttonStyle(.bordered)
+
+            Button("Back to Password") {
+                errorMessage = nil
+                mode = .password
+            }
+            .buttonStyle(.link)
+            .font(.caption)
+        }
+    }
+
+    private var temporaryCodeContent: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "envelope.fill")
+                .font(.system(size: 40))
+                .foregroundStyle(.secondary)
+
+            Text("Enter Temporary Code")
+                .font(.title2.bold())
+
+            Text("A draft email with your code opened in Mail — send it to yourself, then enter the code here. It expires in 15 minutes.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            TextField("XXXX-XXXX-XXXX-XXXX", text: $recoveryCode)
+                .textFieldStyle(.roundedBorder)
+                .focused($isFocused)
+                .onSubmit { attemptTemporaryCodeVerification() }
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            Button("Continue") {
+                attemptTemporaryCodeVerification()
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(recoveryCode.isEmpty)
+
+            Button("Resend Code") {
+                sendTemporaryCode()
+            }
+            .buttonStyle(.link)
+            .font(.caption)
+
+            Button("Back") {
+                errorMessage = nil
+                recoveryCode = ""
+                mode = lockManager.hasRecoveryCode ? .recoveryChoice : .password
+            }
+            .buttonStyle(.link)
+            .font(.caption)
         }
     }
 
@@ -118,7 +219,7 @@ struct LockScreenView: View {
             Button("Back to Password") {
                 errorMessage = nil
                 recoveryCode = ""
-                mode = .password
+                mode = lockManager.hasRecoveryEmail ? .recoveryChoice : .password
             }
             .buttonStyle(.link)
             .font(.caption)
@@ -173,9 +274,36 @@ struct LockScreenView: View {
         if lockManager.verifyRecoveryCode(recoveryCode) {
             recoveryCode = ""
             errorMessage = nil
+            recoveryUsedTemporaryCode = false
             mode = .newPassword
         } else {
             errorMessage = "Incorrect recovery code."
+        }
+    }
+
+    /// Generates a fresh temporary code and opens a pre-filled Mail.app
+    /// draft with it — the code is never shown anywhere in this view, only
+    /// inside that draft, so unlocking this way genuinely requires access
+    /// to the recovery inbox, not just physical access to this Mac.
+    private func sendTemporaryCode() {
+        let code = lockManager.generateTemporaryCode()
+        errorMessage = nil
+        guard MailComposer.openTemporaryCodeDraft(code: code, to: lockManager.recoveryEmail) else {
+            errorMessage = "Couldn't open Mail — make sure a mail account is configured in the Mail app, then try again."
+            return
+        }
+        recoveryCode = ""
+        mode = .temporaryCode
+    }
+
+    private func attemptTemporaryCodeVerification() {
+        if lockManager.verifyTemporaryCode(recoveryCode) {
+            recoveryCode = ""
+            errorMessage = nil
+            recoveryUsedTemporaryCode = true
+            mode = .newPassword
+        } else {
+            errorMessage = "Incorrect or expired code."
         }
     }
 
@@ -184,10 +312,11 @@ struct LockScreenView: View {
             errorMessage = "Passwords don't match."
             return
         }
-        lockManager.completeRecovery(newPassword: newPassword)
+        lockManager.completeRecovery(newPassword: newPassword, usingTemporaryCode: recoveryUsedTemporaryCode)
         newPassword = ""
         confirmPassword = ""
         errorMessage = nil
+        recoveryUsedTemporaryCode = false
         mode = .password
     }
 }

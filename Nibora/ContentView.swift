@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import CoreSpotlight
 
 struct ContentView: View {
     @Environment(VaultManager.self) private var vaultManager
@@ -23,6 +24,8 @@ struct ContentView: View {
     @State private var isHelpPresented = false
     @State private var isGraphPresented = false
     @State private var isAskNiboraPresented = false
+    @State private var isHeatmapPresented = false
+    @State private var isAttachmentsGalleryPresented = false
 
     /// Live count of entries dated today, so the New Entry button can hide
     /// itself the moment today's entry exists — journals are one-per-day.
@@ -62,6 +65,12 @@ struct ContentView: View {
             if appLockManager.isLocked {
                 LockScreenView(lockManager: appLockManager)
             }
+        }
+        .onContinueUserActivity(CSSearchableItemActionType) { activity in
+            guard let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
+                  let uuid = UUID(uuidString: identifier),
+                  let match = allEntriesForSwitcher.first(where: { $0.id == uuid }) else { return }
+            selection = match
         }
     }
 
@@ -120,6 +129,16 @@ struct ContentView: View {
                             }
                         }
                         ToolbarItem {
+                            Button("Writing Calendar", systemImage: "square.grid.3x3.fill") {
+                                isHeatmapPresented = true
+                            }
+                        }
+                        ToolbarItem {
+                            Button("Attachments", systemImage: "photo.on.rectangle.angled") {
+                                isAttachmentsGalleryPresented = true
+                            }
+                        }
+                        ToolbarItem {
                             Button("Guide", systemImage: "questionmark.circle") {
                                 isHelpPresented = true
                             }
@@ -136,7 +155,10 @@ struct ContentView: View {
             .task(id: vaultURL) {
                 EntryIndexer(modelContext: modelContext).rescanFullVault(at: vaultURL)
             }
-            .onChange(of: vaultURL) { selection = nil }
+            .onChange(of: vaultURL) {
+                selection = nil
+                SpotlightIndexer.removeAll()
+            }
             .background {
                 Button("Quick Switcher") { isQuickSwitcherPresented = true }
                     .keyboardShortcut("k", modifiers: .command)
@@ -162,6 +184,20 @@ struct ContentView: View {
             }
             .sheet(isPresented: $isAskNiboraPresented) {
                 AskNiboraView(entries: allEntriesForSwitcher)
+            }
+            .sheet(isPresented: $isHeatmapPresented) {
+                CalendarHeatmapView(entries: allEntriesForSwitcher) { date in
+                    if let match = allEntriesForSwitcher.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
+                        selection = match
+                        isHeatmapPresented = false
+                    }
+                }
+            }
+            .sheet(isPresented: $isAttachmentsGalleryPresented) {
+                AttachmentsGalleryView(vaultURL: vaultURL, entries: allEntriesForSwitcher) { entry in
+                    selection = entry
+                    isAttachmentsGalleryPresented = false
+                }
             }
         } else {
             VaultPickerView()
