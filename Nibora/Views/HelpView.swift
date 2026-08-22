@@ -63,21 +63,29 @@ struct HelpView: View {
 
     Drag or paste an image into an entry and it's saved into that month's Attachments folder and shown in the strip below the editor.
 
+    Entries are also indexed into macOS's system-wide Spotlight search (Cmd+Space) — search from anywhere on your Mac and clicking a result jumps straight into that entry, entirely on-device.
+
     ---
 
     ## Toolbar
 
     In the sidebar:
     - **New Entry** — creates today's entry (hidden once today's entry exists)
-    - **Rescan Vault** — fully re-parses every file, useful after editing files outside the app
+    - **Rescan Vault** — fully re-parses every file, useful after editing files outside the app, or after enabling a feature that needs to backfill older entries
     - **On This Day** — past entries from today's date in previous years
     - **Random Entry** — jumps to a random entry
-    - **Journal Stats** — total entries, total words, current and longest writing streak
+    - **Journal Stats** — total entries, total words, writing streaks, and a recent-mood indicator with a trend chart, inferred automatically on-device — nothing is sent anywhere to compute it
+    - **Entry Graph** — a node graph of entries connected by `[[wikilinks]]`
+    - **Ask Nibora** — ask questions about your own journal in plain English, answered entirely on-device via Apple Intelligence. Requires Apple Intelligence to be enabled and its model downloaded; nothing leaves this Mac
+    - **Writing Calendar** — a GitHub-style heatmap of writing activity over the past year; click a day to jump to that entry
+    - **Attachments** — every image across the whole vault in one browsable grid, not just the current entry's
 
     In an entry:
+    - **Read Aloud** (speaker icon) — reads the entry aloud, with markdown syntax stripped to clean prose first. Voice, rate, and pitch are configurable in Settings > Editor
     - **Focus Mode** (eye icon) — dims every paragraph except the one you're writing
     - **Preview** (split-rectangle icon) — a second pane with fully rendered markdown, no raw syntax
     - **Export to PDF** — saves the current entry as a PDF
+    - **Version History** (clock icon) — periodic automatic snapshots of the entry as you edit, with one-click restore
 
     Anywhere:
     - **⌘K** — quick switcher, jump to any entry by title or date
@@ -90,16 +98,17 @@ struct HelpView: View {
     - Right-click an entry for Choose Icon…, Move Up/Down (when sorted manually), and Delete….
     - Search (top of the sidebar) matches titles and body text, with matches highlighted.
     - Tag pills appear above the entry list once you've used any #tags — click one to filter.
+    - A "Linked From" panel appears below an entry's attachments whenever another entry references it via `[[wikilink]]` — the reverse direction of the link itself.
 
     ---
 
     ## Settings
 
-    - **General** — vault location, window title, sort order, and an optional entry template (with a `{{weekday}}` placeholder) applied to every new entry.
-    - **Editor** — font/size and the timestamp hotkey, which inserts the current time at the cursor.
+    - **General** — vault location, window title, sort order (with an ascending/descending option for the date-based modes), an optional entry template (with a `{{weekday}}` placeholder), and a one-click "Export Vault as Zip…" backup of everything.
+    - **Editor** — font/size, the timestamp hotkey, and Read Aloud's voice/rate/pitch (with a live preview button).
     - **Appearance** — a color picker for every styled markdown element, plus the code-block font.
     - **Import** — bring in Markdown files from another app, and scan for orphaned attachment images no entry references anymore.
-    - **Password** — optional privacy-screen lock with a lock timer and a one-time recovery code. This is a privacy screen, not encryption — entries stay plain text on disk either way.
+    - **Password** — optional privacy-screen lock with a lock timer, a one-time recovery code, and an optional recovery email — if forgotten, the lock screen can open a pre-filled Mail.app draft with a temporary code, which you send to yourself and enter back in. This is a privacy screen, not encryption — entries stay plain text on disk either way.
 
     ---
 

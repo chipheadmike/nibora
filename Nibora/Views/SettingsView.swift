@@ -7,6 +7,7 @@ import SwiftUI
 import SwiftData
 import AppKit
 import AVFoundation
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
     var body: some View {
@@ -31,6 +32,8 @@ private struct GeneralSettingsTab: View {
     @Environment(JournalTitlePreferences.self) private var journalTitlePreferences
     @Environment(EntryTemplatePreferences.self) private var entryTemplatePreferences
 
+    @State private var backupStatusMessage: String?
+
     var body: some View {
         @Bindable var sortPreferences = sortPreferences
         @Bindable var journalTitlePreferences = journalTitlePreferences
@@ -45,6 +48,23 @@ private struct GeneralSettingsTab: View {
                 Button("Change Vault…") {
                     vaultManager.changeVault()
                 }
+            }
+
+            Section("Backup") {
+                Button("Export Vault as Zip…") {
+                    exportVaultBackup()
+                }
+                .disabled(vaultManager.vaultURL == nil)
+
+                if let backupStatusMessage {
+                    Text(backupStatusMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Text("Creates a single .zip file with every entry and attachment in your vault — useful for backups or moving to another Mac.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Journal Title") {
@@ -88,6 +108,29 @@ private struct GeneralSettingsTab: View {
         .frame(width: 440)
         .fixedSize(horizontal: false, vertical: true)
     }
+
+    private func exportVaultBackup() {
+        guard let vaultURL = vaultManager.vaultURL else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.zip]
+        panel.nameFieldStringValue = "Nibora Backup \(Self.backupDateFormatter.string(from: Date()))"
+        guard panel.runModal() == .OK, let destinationURL = panel.url else { return }
+
+        do {
+            try VaultBackupService.exportZip(vaultURL: vaultURL, to: destinationURL)
+            backupStatusMessage = "Backup saved to \(destinationURL.lastPathComponent)."
+        } catch {
+            backupStatusMessage = "Backup failed: \(error.localizedDescription)"
+        }
+    }
+
+    private static let backupDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = TimeZone.current
+        return formatter
+    }()
 }
 
 private struct EditorSettingsTab: View {
@@ -390,6 +433,14 @@ private struct PasswordSettingsTab: View {
                         generatedRecoveryCode = preferences.generateRecoveryCode()
                     }
                 }
+            }
+            .disabled(!preferences.hasPassword)
+
+            Section("Recovery Email") {
+                TextField("you@example.com", text: $preferences.recoveryEmail)
+                Text("If set, the lock screen can also send a one-time temporary code to this address via a Mail.app draft — Nibora opens it pre-filled, but you review and send it yourself. Nothing is sent automatically, and no credentials are stored.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             .disabled(!preferences.hasPassword)
         }

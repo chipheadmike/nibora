@@ -28,6 +28,8 @@ final class AppLockManager: NSObject {
     }
 
     var hasRecoveryCode: Bool { preferences.hasRecoveryCode }
+    var hasRecoveryEmail: Bool { !preferences.recoveryEmail.trimmingCharacters(in: .whitespaces).isEmpty }
+    var recoveryEmail: String { preferences.recoveryEmail }
 
     func unlock(with password: String) -> Bool {
         guard preferences.verifyPassword(password) else { return false }
@@ -39,14 +41,30 @@ final class AppLockManager: NSObject {
         preferences.verifyRecoveryCode(code)
     }
 
-    /// Finishes a recovery-code unlock: the old (forgotten) password is
-    /// replaced, the code is consumed so it can't be reused, and the app
-    /// unlocks. Recovery only ever ends here — verifying the code alone
+    @discardableResult
+    func generateTemporaryCode() -> String {
+        preferences.generateTemporaryCode()
+    }
+
+    func verifyTemporaryCode(_ code: String) -> Bool {
+        preferences.verifyTemporaryCode(code)
+    }
+
+    /// Finishes a recovery unlock (either the saved recovery code or an
+    /// emailed temporary code): the old (forgotten) password is replaced,
+    /// whichever code was used is consumed so it can't be reused, and the
+    /// app unlocks. Recovery only ever ends here — verifying a code alone
     /// isn't enough, since leaving the old, unremembered password in place
-    /// would just recreate the same lockout next time.
-    func completeRecovery(newPassword: String) {
+    /// would just recreate the same lockout next time. Only the code that
+    /// was actually used gets cleared — recovering via email doesn't burn
+    /// a separately-saved recovery code, and vice versa.
+    func completeRecovery(newPassword: String, usingTemporaryCode: Bool) {
         preferences.setPassword(newPassword)
-        preferences.clearRecoveryCode()
+        if usingTemporaryCode {
+            preferences.clearTemporaryCode()
+        } else {
+            preferences.clearRecoveryCode()
+        }
         isLocked = false
     }
 
