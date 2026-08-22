@@ -59,6 +59,13 @@ private struct GeneralSettingsTab: View {
                         Text(mode.label).tag(mode)
                     }
                 }
+                if sortPreferences.mode != .manual {
+                    Picker("Order", selection: $sortPreferences.direction) {
+                        ForEach(EntrySortDirection.allCases) { direction in
+                            Text(direction.label).tag(direction)
+                        }
+                    }
+                }
                 Text("Manual lets you drag/reorder entries yourself via the sidebar's context menu. The date modes ignore that order and always sort live.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -141,6 +148,7 @@ private struct AppearanceSettingsTab: View {
                 ColorPicker("Blockquote", selection: $themeManager.blockquoteColor)
                 ColorPicker("Horizontal Rule", selection: $themeManager.horizontalRuleColor)
                 ColorPicker("Tag", selection: $themeManager.tagColor)
+                ColorPicker("Entry Link", selection: $themeManager.wikilinkColor)
             }
 
             Section("Highlight") {
@@ -180,6 +188,8 @@ private struct ImportSettingsTab: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var importResultMessage: String?
+    @State private var isOrphanScanPresented = false
+    @State private var scannedOrphans: [OrphanedAttachmentScanner.OrphanedFile] = []
 
     var body: some View {
         Form {
@@ -199,10 +209,31 @@ private struct ImportSettingsTab: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section("Attachments") {
+                Button("Scan for Orphaned Attachments…") {
+                    scanForOrphanedAttachments()
+                }
+                .disabled(vaultManager.vaultURL == nil)
+
+                Text("Finds image files in Attachments folders that no entry references anymore, so you can move them to the Trash.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .frame(width: 440)
         .fixedSize(horizontal: false, vertical: true)
+        .sheet(isPresented: $isOrphanScanPresented) {
+            OrphanedAttachmentsView(orphans: scannedOrphans)
+        }
+    }
+
+    private func scanForOrphanedAttachments() {
+        guard let vaultURL = vaultManager.vaultURL else { return }
+        let entries = (try? modelContext.fetch(FetchDescriptor<JournalEntryRecord>())) ?? []
+        scannedOrphans = OrphanedAttachmentScanner.scan(vaultURL: vaultURL, entries: entries)
+        isOrphanScanPresented = true
     }
 
     private func importFromFolder() {
