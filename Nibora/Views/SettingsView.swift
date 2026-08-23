@@ -22,6 +22,8 @@ struct SettingsView: View {
                 .tabItem { Label("Import", systemImage: "square.and.arrow.down") }
             PasswordSettingsTab()
                 .tabItem { Label("Password", systemImage: "lock.fill") }
+            AISettingsTab()
+                .tabItem { Label("AI", systemImage: "sparkles") }
         }
     }
 }
@@ -488,6 +490,61 @@ private struct PasswordSettingsTab: View {
     }
 }
 
+private struct AISettingsTab: View {
+    @Environment(AIProviderPreferences.self) private var preferences
+
+    var body: some View {
+        @Bindable var preferences = preferences
+
+        Form {
+            Section("Provider") {
+                Picker("Ask Nibora uses", selection: $preferences.selectedProvider) {
+                    ForEach(AIProvider.allCases) { provider in
+                        Text(provider.label).tag(provider)
+                    }
+                }
+                Text(privacyNote(for: preferences.selectedProvider))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Claude (Anthropic)") {
+                SecureField("API Key", text: $preferences.claudeAPIKey)
+                Text("From console.anthropic.com. Stored in this Mac's Keychain, never in plain text, never sent anywhere except directly to Anthropic's API.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("ChatGPT (OpenAI)") {
+                SecureField("API Key", text: $preferences.openAIAPIKey)
+                Text("From platform.openai.com. Stored in this Mac's Keychain, never in plain text, never sent anywhere except directly to OpenAI's API.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Text("Claude and ChatGPT are billed to your own API key, pay-per-use — not part of any Nibora cost. On-Device is free and requires no key, but depends on Apple Intelligence being enabled on this Mac.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 440)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func privacyNote(for provider: AIProvider) -> String {
+        switch provider {
+        case .onDevice:
+            return "Fully local — your questions and journal excerpts never leave this Mac."
+        case .claude:
+            return "Your questions and relevant journal excerpts are sent to Anthropic's servers to be answered."
+        case .chatGPT:
+            return "Your questions and relevant journal excerpts are sent to OpenAI's servers to be answered."
+        }
+    }
+}
+
 /// Shows a freshly-generated recovery code exactly once — the app never
 /// retains a copy after this (only the hash persists), so this is the
 /// only chance to save it.
@@ -546,5 +603,6 @@ private struct RecoveryCodeRevealView: View {
         .environment(SpeechVoicePreferences())
         .environment(PasswordLockPreferences())
         .environment(AppLockManager(preferences: PasswordLockPreferences()))
+        .environment(AIProviderPreferences())
         .modelContainer(for: JournalEntryRecord.self, inMemory: true)
 }

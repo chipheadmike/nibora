@@ -4,68 +4,56 @@
 //
 
 import Foundation
-import FoundationModels
 
-/// Answers questions about the user's own journal using Apple's on-device
-/// Foundation Models framework — no network call, no subscription, nothing
-/// leaves the machine. Only works when Apple Intelligence is enabled and
-/// available on this Mac; checkAvailability() surfaces why when it isn't.
+/// Routes a journal question to whichever AI backend the user has selected
+/// (see AIProviderPreferences) — the relevant-excerpt retrieval below is
+/// shared across all three providers; only the "send it to a model" step
+/// differs, and that's each provider's own concern via JournalAIProvider.
 @Observable
 final class JournalQueryService {
+    private let preferences: AIProviderPreferences
+
+    init(preferences: AIProviderPreferences) {
+        self.preferences = preferences
+    }
+
     func checkAvailability() -> String? {
-        switch SystemLanguageModel.default.availability {
-        case .available:
-            return nil
-        case .unavailable(.deviceNotEligible):
-            return "This Mac doesn't support on-device Apple Intelligence."
-        case .unavailable(.appleIntelligenceNotEnabled):
-            return "Turn on Apple Intelligence in System Settings > Apple Intelligence & Siri to use this."
-        case .unavailable(.modelNotReady):
-            return "The on-device model is still downloading or preparing — try again shortly."
-        case .unavailable:
-            return "On-device AI isn't available right now."
+        switch preferences.selectedProvider {
+        case .onDevice:
+            return OnDeviceAIProvider.checkAvailability()
+        case .claude:
+            return preferences.claudeAPIKey.trimmingCharacters(in: .whitespaces).isEmpty
+                ? "Add your Anthropic API key in Settings > AI to use Claude."
+                : nil
+        case .chatGPT:
+            return preferences.openAIAPIKey.trimmingCharacters(in: .whitespaces).isEmpty
+                ? "Add your OpenAI API key in Settings > AI to use ChatGPT."
+                : nil
+        }
+    }
+
+    func ask(_ question: String, entries: [JournalEntryRecord]) async throws -> String {
+        let context = Self.contextBlock(for: question, entries: entries)
+        return try await makeProvider().ask(question: question, context: context)
+    }
+
+    private func makeProvider() -> JournalAIProvider {
+        switch preferences.selectedProvider {
+        case .onDevice: return OnDeviceAIProvider()
+        case .claude: return ClaudeAIProvider(apiKey: preferences.claudeAPIKey)
+        case .chatGPT: return ChatGPTAIProvider(apiKey: preferences.openAIAPIKey)
         }
     }
 
     /// Feeds the model a small, keyword-relevant slice of the journal
-    /// rather than everything — the on-device model's context window is
-    /// limited, and this is a much closer approximation of "search my
-    /// journal" than either dumping the whole vault in or only looking at
-    /// recent entries. Kept deliberately small (5 excerpts, 400 chars each)
-    /// since a smaller payload is also somewhat less likely to trip the
-    /// model's on-device safety guardrail, which has been observed
-    /// triggering on entirely ordinary journal content in this beta.
-    func ask(_ question: String, entries: [JournalEntryRecord]) async throws -> String {
-        let relevant = Self.relevantEntries(for: question, in: entries, limit: 5)
-        let context = relevant.map { entry in
-            "[\(Self.dateFormatter.string(from: entry.date))] \(entry.title): \(entry.searchableBody.prefix(400))"
-        }.joined(separator: "\n\n")
-
-        let instructions = """
-        You answer questions about the user's personal journal using ONLY the journal excerpts provided below. \
-        If the excerpts don't contain the answer, say you don't see anything about that in the journal — never make something up.
-
-        Journal excerpts:
-        \(context)
-        """
-
-        let session = LanguageModelSession(instructions: instructions)
-        do {
-            let response = try await session.respond(to: question)
-            return response.content
-        } catch let error as LanguageModelSession.GenerationError {
-            if case .guardrailViolation = error {
-                // The guardrail can trip on the injected journal content
-                // rather than the question itself — retry once with no
-                // journal context at all, so a genuinely ordinary question
-                // still gets some answer instead of a dead end.
-                let bareSession = LanguageModelSession()
-                if let bareResponse = try? await bareSession.respond(to: question) {
-                    return bareResponse.content + "\n\n(Answered without journal context — including your journal excerpts triggered the on-device model's safety filter this time.)"
-                }
-            }
-            throw error
-        }
+    /// rather than everything — every provider here has a limited context
+    /// window one way or another, and this is a much closer approximation
+    /// of "search my journal" than either dumping the whole vault in or
+    /// only looking at recent entries.
+    private static func contextBlock(for question: String, entries: [JournalEntryRecord], limit: Int = 5) -> String {
+        relevantEntries(for: question, in: entries, limit: limit)
+            .map { entry in "[\(dateFormatter.string(from: entry.date))] \(entry.title): \(entry.searchableBody.prefix(400))" }
+            .joined(separator: "\n\n")
     }
 
     private static func relevantEntries(for question: String, in entries: [JournalEntryRecord], limit: Int) -> [JournalEntryRecord] {

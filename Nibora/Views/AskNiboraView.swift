@@ -12,13 +12,22 @@ struct AskNiboraView: View {
     let entries: [JournalEntryRecord]
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(AIProviderPreferences.self) private var aiProviderPreferences
     @State private var question = ""
     @State private var answer: String?
     @State private var isAsking = false
-    @State private var unavailableReason: String?
     @State private var errorMessage: String?
 
-    private let queryService = JournalQueryService()
+    /// Recomputed on every access rather than cached, so switching
+    /// providers in Settings while this sheet is open (or just reopening
+    /// it later) always reflects the currently-selected one.
+    private var queryService: JournalQueryService {
+        JournalQueryService(preferences: aiProviderPreferences)
+    }
+
+    private var unavailableReason: String? {
+        queryService.checkAvailability()
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -35,7 +44,7 @@ struct AskNiboraView: View {
 
             if let unavailableReason {
                 ContentUnavailableView(
-                    "On-Device AI Unavailable",
+                    "\(aiProviderPreferences.selectedProvider.label) Unavailable",
                     systemImage: "sparkles",
                     description: Text(unavailableReason)
                 )
@@ -58,7 +67,7 @@ struct AskNiboraView: View {
                             ProgressView("Thinking…")
                         }
                         if answer == nil && errorMessage == nil && !isAsking {
-                            Text("Ask anything about your journal — e.g. \"What have I said about work stress this year?\" Everything runs on-device; nothing leaves this Mac.")
+                            Text("Ask anything about your journal — e.g. \"What have I said about work stress this year?\" \(providerPrivacyNote)")
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                         }
@@ -80,8 +89,13 @@ struct AskNiboraView: View {
             }
         }
         .frame(width: 480, height: 480)
-        .onAppear {
-            unavailableReason = queryService.checkAvailability()
+    }
+
+    private var providerPrivacyNote: String {
+        switch aiProviderPreferences.selectedProvider {
+        case .onDevice: return "Everything runs on-device; nothing leaves this Mac."
+        case .claude: return "Your question and relevant journal excerpts are sent to Anthropic's Claude API."
+        case .chatGPT: return "Your question and relevant journal excerpts are sent to OpenAI's ChatGPT API."
         }
     }
 
