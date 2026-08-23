@@ -76,7 +76,7 @@ struct HelpView: View {
     - **Random Entry** — jumps to a random entry
     - **Journal Stats** — total entries, total words, writing streaks, and a recent-mood indicator with a trend chart, inferred automatically on-device — nothing is sent anywhere to compute it
     - **Entry Graph** — a node graph of entries connected by `[[wikilinks]]`
-    - **Ask Nibora** — ask questions about your own journal in plain English, answered entirely on-device via Apple Intelligence. Requires Apple Intelligence to be enabled and its model downloaded; nothing leaves this Mac
+    - **Ask Nibora** — ask questions about your own journal in plain English. Uses whichever AI provider is selected in Settings > AI: On-Device (Apple Intelligence, free and fully local), or your own Claude or ChatGPT API key (journal excerpts are sent to that provider's servers, billed per-use to your own account)
     - **Writing Calendar** — a GitHub-style heatmap of writing activity over the past year; click a day to jump to that entry
     - **Attachments** — every image across the whole vault in one browsable grid, not just the current entry's
 
@@ -109,6 +109,7 @@ struct HelpView: View {
     - **Appearance** — a color picker for every styled markdown element, plus the code-block font.
     - **Import** — bring in Markdown files from another app, and scan for orphaned attachment images no entry references anymore.
     - **Password** — optional privacy-screen lock with a lock timer, a one-time recovery code, and an optional recovery email — if forgotten, the lock screen can open a pre-filled Mail.app draft with a temporary code, which you send to yourself and enter back in. This is a privacy screen, not encryption — entries stay plain text on disk either way.
+    - **AI** — choose Ask Nibora's provider (On-Device, Claude, or ChatGPT) and enter your own API key for the cloud options. Keys are stored in this Mac's Keychain, never in plain text.
 
     ---
 

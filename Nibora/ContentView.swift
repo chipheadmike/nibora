@@ -27,20 +27,26 @@ struct ContentView: View {
     @State private var isHeatmapPresented = false
     @State private var isAttachmentsGalleryPresented = false
 
-    /// Live count of entries dated today, so the New Entry button can hide
-    /// itself the moment today's entry exists — journals are one-per-day.
-    @Query private var todaysEntries: [JournalEntryRecord]
-
-    /// Backs the Cmd+K quick switcher — every entry, newest first.
+    /// Backs the Cmd+K quick switcher — every entry, newest first. Also
+    /// used to check for today's entry (see hasEntryForToday) instead of a
+    /// separate date-filtered @Query: a predicate built from `Date()` at
+    /// init time gets baked in permanently — SwiftUI never re-runs a
+    /// view's init just because time passed — so if Nibora stays open
+    /// across midnight, that frozen "today" silently goes stale until the
+    /// app restarts. Computing it fresh on every access avoids that.
     @Query(sort: \JournalEntryRecord.date, order: .reverse) private var allEntriesForSwitcher: [JournalEntryRecord]
 
-    init() {
-        let todayStart = Calendar.current.startOfDay(for: Date())
-        _todaysEntries = Query(filter: #Predicate<JournalEntryRecord> { $0.date == todayStart })
-    }
+    /// Bumped once a day by watchForDayChange() purely to force a re-render
+    /// at the midnight boundary — hasEntryForToday itself always computes
+    /// Date() fresh, but SwiftUI only re-evaluates body when some tracked
+    /// value actually changes, and nothing else in this view necessarily
+    /// changes overnight if the app just sits idle.
+    @State private var currentDay = Calendar.current.startOfDay(for: Date())
 
     private var hasEntryForToday: Bool {
-        !todaysEntries.isEmpty
+        _ = currentDay
+        let todayStart = Calendar.current.startOfDay(for: Date())
+        return allEntriesForSwitcher.contains { $0.date == todayStart }
     }
 
     /// Entries whose date shares today's month/day (any year), excluding
@@ -71,6 +77,27 @@ struct ContentView: View {
                   let uuid = UUID(uuidString: identifier),
                   let match = allEntriesForSwitcher.first(where: { $0.id == uuid }) else { return }
             selection = match
+        }
+        .task {
+            await watchForDayChange()
+        }
+    }
+
+    /// Sleeps until just past the next midnight, then bumps `currentDay` —
+    /// repeating for as long as the view exists — purely to force a
+    /// re-render so the New Entry button notices the date changed even if
+    /// Nibora sits open, untouched, overnight.
+    private func watchForDayChange() async {
+        while !Task.isCancelled {
+            let now = Date()
+            let calendar = Calendar.current
+            guard let nextMidnight = calendar.nextDate(after: now, matching: DateComponents(hour: 0, minute: 0, second: 0), matchingPolicy: .nextTime) else {
+                return
+            }
+            let interval = nextMidnight.timeIntervalSince(now) + 1
+            try? await Task.sleep(for: .seconds(interval))
+            guard !Task.isCancelled else { return }
+            currentDay = calendar.startOfDay(for: Date())
         }
     }
 

@@ -18,6 +18,7 @@ struct NiboraApp: App {
     @State private var journalTitlePreferences = JournalTitlePreferences()
     @State private var entryTemplatePreferences = EntryTemplatePreferences()
     @State private var speechVoicePreferences = SpeechVoicePreferences()
+    @State private var aiProviderPreferences = AIProviderPreferences()
     @State private var passwordLockPreferences: PasswordLockPreferences
     @State private var appLockManager: AppLockManager
 
@@ -46,6 +47,7 @@ struct NiboraApp: App {
                 .environment(journalTitlePreferences)
                 .environment(entryTemplatePreferences)
                 .environment(speechVoicePreferences)
+                .environment(aiProviderPreferences)
                 .environment(passwordLockPreferences)
                 .environment(appLockManager)
         }
@@ -61,6 +63,7 @@ struct NiboraApp: App {
                 .environment(journalTitlePreferences)
                 .environment(entryTemplatePreferences)
                 .environment(speechVoicePreferences)
+                .environment(aiProviderPreferences)
                 .environment(passwordLockPreferences)
                 .environment(appLockManager)
         }
