@@ -24,6 +24,7 @@ struct ContentView: View {
     @State private var isHelpPresented = false
     @State private var isGraphPresented = false
     @State private var isAskNiboraPresented = false
+    @State private var isDigestPresented = false
     @State private var isHeatmapPresented = false
     @State private var isAttachmentsGalleryPresented = false
 
@@ -121,6 +122,24 @@ struct ContentView: View {
                             }
                         }
                         ToolbarItem {
+                            Menu {
+                                ForEach(vaultManager.recentVaults.sorted(by: { $0.lastOpenedAt > $1.lastOpenedAt })) { info in
+                                    Button {
+                                        vaultManager.switchToVault(info)
+                                    } label: {
+                                        Label(info.displayName, systemImage: vaultManager.isCurrent(info) ? "checkmark.circle.fill" : "externaldrive")
+                                    }
+                                    .disabled(vaultManager.isCurrent(info))
+                                }
+                                Divider()
+                                Button("Open Other Vault…") {
+                                    vaultManager.pickVault()
+                                }
+                            } label: {
+                                Label("Vaults", systemImage: "externaldrive.badge.plus")
+                            }
+                        }
+                        ToolbarItem {
                             Button("On This Day", systemImage: "calendar.badge.clock") {
                                 isOnThisDayPresented = true
                             }
@@ -153,6 +172,11 @@ struct ContentView: View {
                         ToolbarItem {
                             Button("Ask Nibora", systemImage: "sparkles") {
                                 isAskNiboraPresented = true
+                            }
+                        }
+                        ToolbarItem {
+                            Button("Journal Digest", systemImage: "text.book.closed") {
+                                isDigestPresented = true
                             }
                         }
                         ToolbarItem {
@@ -211,6 +235,9 @@ struct ContentView: View {
             }
             .sheet(isPresented: $isAskNiboraPresented) {
                 AskNiboraView(entries: allEntriesForSwitcher)
+            }
+            .sheet(isPresented: $isDigestPresented) {
+                JournalDigestView(entries: allEntriesForSwitcher)
             }
             .sheet(isPresented: $isHeatmapPresented) {
                 CalendarHeatmapView(entries: allEntriesForSwitcher) { date in
@@ -289,6 +316,9 @@ struct ContentView: View {
         .environment(FontPreferences())
         .environment(JournalTitlePreferences())
         .environment(EntryTemplatePreferences())
+        .environment(SpeechVoicePreferences())
+        .environment(AIProviderPreferences())
+        .environment(AppAppearancePreferences())
         .environment(AppLockManager(preferences: PasswordLockPreferences()))
         .modelContainer(for: JournalEntryRecord.self, inMemory: true)
 }

@@ -19,6 +19,7 @@ struct NiboraApp: App {
     @State private var entryTemplatePreferences = EntryTemplatePreferences()
     @State private var speechVoicePreferences = SpeechVoicePreferences()
     @State private var aiProviderPreferences = AIProviderPreferences()
+    @State private var appAppearancePreferences = AppAppearancePreferences()
     @State private var passwordLockPreferences: PasswordLockPreferences
     @State private var appLockManager: AppLockManager
 
@@ -48,9 +49,19 @@ struct NiboraApp: App {
                 .environment(entryTemplatePreferences)
                 .environment(speechVoicePreferences)
                 .environment(aiProviderPreferences)
+                .environment(appAppearancePreferences)
                 .environment(passwordLockPreferences)
                 .environment(appLockManager)
+                .preferredColorScheme(appAppearancePreferences.mode.colorScheme)
         }
+        .modelContainer(sharedModelContainer)
+
+        MenuBarExtra("Quick Capture", systemImage: "square.and.pencil") {
+            QuickCaptureView()
+                .environment(vaultManager)
+                .environment(entryTemplatePreferences)
+        }
+        .menuBarExtraStyle(.window)
         .modelContainer(sharedModelContainer)
 
         Settings {
@@ -64,8 +75,10 @@ struct NiboraApp: App {
                 .environment(entryTemplatePreferences)
                 .environment(speechVoicePreferences)
                 .environment(aiProviderPreferences)
+                .environment(appAppearancePreferences)
                 .environment(passwordLockPreferences)
                 .environment(appLockManager)
+                .preferredColorScheme(appAppearancePreferences.mode.colorScheme)
         }
         .modelContainer(sharedModelContainer)
     }
