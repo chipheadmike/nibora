@@ -27,6 +27,17 @@ struct HourlyActivity: Identifiable {
     let count: Int
 }
 
+enum JournalActivity {
+    /// Word count of today's entry, or 0 if none exists yet — used by the
+    /// menu bar glance, which needs this on its own without computing the
+    /// full JournalStats pass.
+    static func todaysWordCount(from entries: [JournalEntryRecord]) -> Int {
+        let todayStart = Calendar.current.startOfDay(for: Date())
+        guard let today = entries.first(where: { $0.date == todayStart }) else { return 0 }
+        return today.searchableBody.split(whereSeparator: \.isWhitespace).count
+    }
+}
+
 struct JournalStats {
     let totalEntries: Int
     let totalWords: Int

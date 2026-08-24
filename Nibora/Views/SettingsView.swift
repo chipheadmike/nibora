@@ -20,6 +20,8 @@ struct SettingsView: View {
                 .tabItem { Label("Editor", systemImage: "textformat") }
             AppearanceSettingsTab()
                 .tabItem { Label("Appearance", systemImage: "paintpalette") }
+            ColorsSettingsTab()
+                .tabItem { Label("Colors", systemImage: "paintbrush") }
             ImportSettingsTab()
                 .tabItem { Label("Import", systemImage: "square.and.arrow.down") }
             PasswordSettingsTab()
@@ -307,12 +309,10 @@ private struct EditorSettingsTab: View {
 
 private struct AppearanceSettingsTab: View {
     @Environment(ThemeManager.self) private var themeManager
-    @Environment(FontPreferences.self) private var fontPreferences
     @Environment(AppAppearancePreferences.self) private var appAppearancePreferences
 
     var body: some View {
         @Bindable var themeManager = themeManager
-        @Bindable var fontPreferences = fontPreferences
         @Bindable var appAppearancePreferences = appAppearancePreferences
 
         Form {
@@ -322,7 +322,7 @@ private struct AppearanceSettingsTab: View {
                         Text(mode.label).tag(mode)
                     }
                 }
-                Text("Overrides the system setting for Nibora only. Every color below automatically adjusts brightness as needed to stay legible against whichever mode is active — Light and Dark aren't separate palettes, just a readability nudge on top of the ones you've chosen.")
+                Text("Overrides the system setting for Nibora only. Every color on the Colors tab automatically adjusts brightness as needed to stay legible against whichever mode is active — Light and Dark aren't separate palettes, just a readability nudge on top of the ones you've chosen.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -352,27 +352,38 @@ private struct AppearanceSettingsTab: View {
                     }
                     .padding(.vertical, 4)
                 }
-                Text("Applies every color below at once — a starting point you can still fine-tune with the individual pickers.")
+                Text("Applies every color on the Colors tab at once — a starting point you can still fine-tune there.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+        .formStyle(.grouped)
+        .frame(width: 440)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
 
+private struct ColorsSettingsTab: View {
+    @Environment(ThemeManager.self) private var themeManager
+    @Environment(FontPreferences.self) private var fontPreferences
+
+    var body: some View {
+        @Bindable var themeManager = themeManager
+        @Bindable var fontPreferences = fontPreferences
+
+        Form {
             Section("Text Colors") {
-                ColorPicker("Body Text", selection: $themeManager.bodyColor)
-                ColorPicker("# Heading 1", selection: $themeManager.h1Color)
-                ColorPicker("## Heading 2", selection: $themeManager.h2Color)
-                ColorPicker("### Heading 3", selection: $themeManager.h3Color)
-                ColorPicker("#### Heading 4", selection: $themeManager.h4Color)
-                ColorPicker("##### Heading 5", selection: $themeManager.h5Color)
-                ColorPicker("###### Heading 6", selection: $themeManager.h6Color)
-                ColorPicker("Bold", selection: $themeManager.boldColor)
-                ColorPicker("Italic", selection: $themeManager.italicColor)
-                ColorPicker("Link", selection: $themeManager.linkColor)
-                ColorPicker("Strikethrough", selection: $themeManager.strikethroughColor)
-                ColorPicker("Blockquote", selection: $themeManager.blockquoteColor)
-                ColorPicker("Horizontal Rule", selection: $themeManager.horizontalRuleColor)
-                ColorPicker("Tag", selection: $themeManager.tagColor)
-                ColorPicker("Entry Link", selection: $themeManager.wikilinkColor)
+                Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 12) {
+                    colorGridRow("Body Text", $themeManager.bodyColor, "# Heading 1", $themeManager.h1Color)
+                    colorGridRow("## Heading 2", $themeManager.h2Color, "### Heading 3", $themeManager.h3Color)
+                    colorGridRow("#### Heading 4", $themeManager.h4Color, "##### Heading 5", $themeManager.h5Color)
+                    colorGridRow("###### Heading 6", $themeManager.h6Color, "Bold", $themeManager.boldColor)
+                    colorGridRow("Italic", $themeManager.italicColor, "Link", $themeManager.linkColor)
+                    colorGridRow("Strikethrough", $themeManager.strikethroughColor, "Blockquote", $themeManager.blockquoteColor)
+                    colorGridRow("Horizontal Rule", $themeManager.horizontalRuleColor, "Tag", $themeManager.tagColor)
+                    colorGridRow("Entry Link", $themeManager.wikilinkColor)
+                }
+                .padding(.vertical, 4)
             }
 
             Section("Highlight") {
@@ -404,6 +415,30 @@ private struct AppearanceSettingsTab: View {
         .formStyle(.grouped)
         .frame(width: 440)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder
+    private func colorGridRow(_ label1: String, _ color1: Binding<Color>, _ label2: String? = nil, _ color2: Binding<Color>? = nil) -> some View {
+        GridRow {
+            colorCell(label1, color1)
+            if let label2, let color2 {
+                colorCell(label2, color2)
+            } else {
+                Color.clear
+            }
+        }
+    }
+
+    private func colorCell(_ label: String, _ color: Binding<Color>) -> some View {
+        HStack {
+            Text(label)
+                .font(.callout)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            ColorPicker("", selection: color)
+                .labelsHidden()
+        }
+        .gridCellColumns(1)
     }
 }
 
