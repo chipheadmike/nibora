@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import Charts
 import FoundationModels
 
 /// A one-shot AI-generated recap of recent entries — reuses the same
@@ -29,6 +30,10 @@ struct JournalDigestView: View {
 
     private var entriesInRange: [JournalEntryRecord] {
         JournalQueryService.entriesInRange(entries, for: period)
+    }
+
+    private var periodStats: JournalStats {
+        JournalStats.compute(from: entriesInRange)
     }
 
     var body: some View {
@@ -68,6 +73,35 @@ struct JournalDigestView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
+                        if !entriesInRange.isEmpty {
+                            statsSummary
+
+                            if periodStats.sentimentPoints.count > 1 {
+                                Text("Mood Over This Period")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Chart(periodStats.sentimentPoints) { point in
+                                    LineMark(x: .value("Date", point.date), y: .value("Sentiment", point.score))
+                                        .foregroundStyle(.blue)
+                                    AreaMark(x: .value("Date", point.date), y: .value("Sentiment", point.score))
+                                        .foregroundStyle(.blue.opacity(0.12))
+                                }
+                                .chartYScale(domain: -1...1)
+                                .chartYAxis(.hidden)
+                                .chartXAxis(.hidden)
+                                .frame(height: 70)
+                            }
+
+                            if !periodStats.topWords.isEmpty {
+                                Text("Frequent Words")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                WordCloudView(words: periodStats.topWords)
+                            }
+
+                            Divider()
+                        }
+
                         if let digest {
                             Text(digest)
                                 .textSelection(.enabled)
@@ -88,7 +122,7 @@ struct JournalDigestView: View {
                                     .font(.callout)
                                     .foregroundStyle(.secondary)
                             } else {
-                                Text("\(entriesInRange.count) \(entriesInRange.count == 1 ? "entry" : "entries") in this period. \(providerPrivacyNote)")
+                                Text(providerPrivacyNote)
                                     .font(.callout)
                                     .foregroundStyle(.secondary)
                             }
@@ -108,8 +142,32 @@ struct JournalDigestView: View {
                 .padding(12)
             }
         }
-        .frame(width: 480, height: 480)
+        .frame(width: 480, height: 600)
     }
+
+    private var statsSummary: some View {
+        HStack(spacing: 20) {
+            statTile("Entries", "\(periodStats.totalEntries)")
+            statTile("Words", Self.numberFormatter.string(from: NSNumber(value: periodStats.totalWords)) ?? "\(periodStats.totalWords)")
+            statTile("Longest Streak", periodStats.longestStreak == 1 ? "1 day" : "\(periodStats.longestStreak) days")
+        }
+    }
+
+    private func statTile(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.title2.bold())
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private static let numberFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        return formatter
+    }()
 
     private var providerPrivacyNote: String {
         switch aiProviderPreferences.selectedProvider {

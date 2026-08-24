@@ -80,7 +80,7 @@ struct HelpView: View {
     - **Journal Stats** — total entries, total words, writing streaks, a recent-mood indicator with a trend chart, a chart of what time of day you tend to write, and a word cloud of your most frequent words — all inferred automatically on-device, nothing is sent anywhere to compute it
     - **Entry Graph** — a node graph of entries connected by `[[wikilinks]]`
     - **Ask Nibora** — ask questions about your own journal in plain English. Uses whichever AI provider is selected in Settings > AI: On-Device (Apple Intelligence, free and fully local), or your own Claude or ChatGPT API key (journal excerpts are sent to that provider's servers, billed per-use to your own account)
-    - **Journal Digest** — an AI-generated recap of the past 7 or 30 days, surfacing recurring themes and mood shifts. Same provider and privacy rules as Ask Nibora
+    - **Journal Digest** — entry/word counts, a mood chart, a word cloud, and an AI-generated recap for the past 7 days, 30 days, or year (a built-in "Year in Review"), surfacing recurring themes and mood shifts. Same provider and privacy rules as Ask Nibora
     - **Writing Calendar** — a GitHub-style heatmap of writing activity over the past year; click a day to jump to that entry
     - **Attachments** — every image across the whole vault in one browsable grid, not just the current entry's
 
@@ -95,7 +95,7 @@ struct HelpView: View {
     - **⌘K** — quick switcher, jump to any entry by title or date
 
     In the menu bar (the pencil icon, always available even if Nibora's window is closed):
-    - **Quick Capture** — jot a note without opening the app; it's appended, timestamped, to today's entry, creating it first if needed. A click-triggered window only — nothing runs in the background listening for keystrokes
+    - **Quick Capture** — jot a note without opening the app; it's appended, timestamped, to today's entry, creating it first if needed. A click-triggered window only — nothing runs in the background listening for keystrokes. Opening it shows your current writing streak and today's word count at a glance
 
     Outside the app entirely:
     - **Siri / Shortcuts** — say "Capture a journal entry in Nibora" (or build a Shortcuts automation around it) to append a note to today's entry, hands-free. Uses Apple's App Intents framework, the same officially-supported mechanism apps use for Siri and Shortcuts — not a custom background listener
@@ -117,7 +117,8 @@ struct HelpView: View {
     - **General** — vault location (and switching between every vault you've opened), window title, sort order (with an ascending/descending option for the date-based modes), and a one-click "Export Vault as Zip…" backup of everything.
     - **Entries** — a reminder notification for days you haven't written yet, and optional named entry templates (with a `{{weekday}}` placeholder — with more than one, New Entry becomes a menu to pick from).
     - **Editor** — font/size, the timestamp hotkey, and Read Aloud's voice/rate/pitch (with a live preview button).
-    - **Appearance** — a Display picker to override Light/Dark/System for Nibora only (every color below automatically nudges its brightness to stay legible in whichever mode is active), one-click theme presets, a color picker for every styled markdown element, plus the code-block font.
+    - **Appearance** — a Display picker to override Light/Dark/System for Nibora only, and one-click theme presets.
+    - **Colors** — a color picker for every styled markdown element (every color automatically nudges its brightness to stay legible in whichever Light/Dark mode is active), plus the code-block font.
     - **Import** — bring in Markdown files from another app, and scan for orphaned attachment images no entry references anymore.
     - **Password** — optional privacy-screen lock with a lock timer, a one-time recovery code, and an optional recovery email — if forgotten, the lock screen can open a pre-filled Mail.app draft with a temporary code, which you send to yourself and enter back in. This is a privacy screen, not encryption — entries stay plain text on disk either way.
     - **AI** — choose Ask Nibora's provider (On-Device, Claude, or ChatGPT) and enter your own API key for the cloud options. Keys are stored in this Mac's Keychain, never in plain text.
