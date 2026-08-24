@@ -8,6 +8,10 @@ import Charts
 
 struct JournalStatsView: View {
     let stats: JournalStats
+    /// Streaks assume one entry per day, which only Journal vaults do —
+    /// hidden entirely for Freeform rather than shown reading a misleading
+    /// "0 days".
+    var showStreaks: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -16,8 +20,10 @@ struct JournalStatsView: View {
 
             statRow(label: "Total Entries", value: "\(stats.totalEntries)")
             statRow(label: "Total Words", value: Self.numberFormatter.string(from: NSNumber(value: stats.totalWords)) ?? "\(stats.totalWords)")
-            statRow(label: "Current Streak", value: streakText(stats.currentStreak))
-            statRow(label: "Longest Streak", value: streakText(stats.longestStreak))
+            if showStreaks {
+                statRow(label: "Current Streak", value: streakText(stats.currentStreak))
+                statRow(label: "Longest Streak", value: streakText(stats.longestStreak))
+            }
             statRow(label: "Recent Mood", value: "\(moodEmoji(for: stats.recentAverageSentiment)) \(moodLabel(for: stats.recentAverageSentiment))")
 
             if stats.sentimentPoints.count > 1 {

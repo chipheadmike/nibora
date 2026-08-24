@@ -146,27 +146,33 @@ private struct GeneralSettingsTab: View {
 private struct EntriesSettingsTab: View {
     @Environment(EntryTemplatePreferences.self) private var entryTemplatePreferences
     @Environment(StreakReminderPreferences.self) private var reminderPreferences
+    @Environment(VaultManager.self) private var vaultManager
 
     var body: some View {
         @Bindable var entryTemplatePreferences = entryTemplatePreferences
         @Bindable var reminderPreferences = reminderPreferences
 
         Form {
-            Section("Reminders") {
-                Toggle("Remind me if I haven't written yet", isOn: Binding(
-                    get: { reminderPreferences.isEnabled },
-                    set: { newValue in
-                        reminderPreferences.isEnabled = newValue
-                        if newValue {
-                            StreakReminderScheduler.requestAuthorizationIfNeeded()
+            // "Haven't written today" isn't meaningful for a Freeform vault
+            // (no daily cadence), so this section doesn't apply there —
+            // hidden entirely rather than shown inert.
+            if vaultManager.currentVaultType == .journal {
+                Section("Reminders") {
+                    Toggle("Remind me if I haven't written yet", isOn: Binding(
+                        get: { reminderPreferences.isEnabled },
+                        set: { newValue in
+                            reminderPreferences.isEnabled = newValue
+                            if newValue {
+                                StreakReminderScheduler.requestAuthorizationIfNeeded()
+                            }
                         }
-                    }
-                ))
-                DatePicker("At", selection: $reminderPreferences.reminderTime, displayedComponents: .hourAndMinute)
-                    .disabled(!reminderPreferences.isEnabled)
-                Text("A single local notification, only on days you haven't written yet. Nothing is sent anywhere — this uses macOS's own notification scheduling.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    ))
+                    DatePicker("At", selection: $reminderPreferences.reminderTime, displayedComponents: .hourAndMinute)
+                        .disabled(!reminderPreferences.isEnabled)
+                    Text("A single local notification, only on days you haven't written yet. Nothing is sent anywhere — this uses macOS's own notification scheduling.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("Templates") {

@@ -8,45 +8,54 @@ import UniformTypeIdentifiers
 
 struct GalleryAttachment: Identifiable {
     let url: URL
-    let monthKey: String
+    /// Vault-relative path of the folder this attachment's Attachments/
+    /// folder lives in ("" = vault root) — a Journal vault's month folder
+    /// name, or a Freeform vault's (possibly nested) folder path.
+    let folderRelativePath: String
     let fileName: String
     var id: URL { url }
 }
 
-/// Walks every month's Attachments/ folder and lists all image files,
-/// chronologically (month folders sort as strings, and attachment
-/// filenames are timestamp-prefixed, so simple name sorting is enough).
+/// Recursively finds every Attachments/ folder anywhere in the vault and
+/// lists their image files — a plain one-level walk (Journal's month
+/// folders only) would silently miss Freeform vaults' arbitrarily nested
+/// Attachments folders.
 enum AttachmentGalleryScanner {
     static func scan(vaultURL: URL) -> [GalleryAttachment] {
-        let fileManager = FileManager.default
-        guard let monthFolders = try? fileManager.contentsOfDirectory(
-            at: vaultURL,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return []
-        }
-
         var results: [GalleryAttachment] = []
-        for monthFolder in monthFolders.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
-            let monthKey = monthFolder.lastPathComponent
-            let attachmentsFolder = monthFolder.appendingPathComponent("Attachments")
-            guard let files = try? fileManager.contentsOfDirectory(at: attachmentsFolder, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) else {
-                continue
-            }
-            for fileURL in files.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) where isImageFile(fileURL) {
-                results.append(GalleryAttachment(url: fileURL, monthKey: monthKey, fileName: fileURL.lastPathComponent))
+        walk(vaultURL, relativePath: "", results: &results)
+        return results.sorted {
+            $0.folderRelativePath == $1.folderRelativePath ? $0.fileName < $1.fileName : $0.folderRelativePath < $1.folderRelativePath
+        }
+    }
+
+    private static func walk(_ folderURL: URL, relativePath: String, results: inout [GalleryAttachment]) {
+        let fileManager = FileManager.default
+        guard let contents = try? fileManager.contentsOfDirectory(at: folderURL, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) else { return }
+
+        for itemURL in contents {
+            let isDirectory = (try? itemURL.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+            guard isDirectory else { continue }
+
+            if itemURL.lastPathComponent == "Attachments" {
+                guard let files = try? fileManager.contentsOfDirectory(at: itemURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) else { continue }
+                for fileURL in files where isImageFile(fileURL) {
+                    results.append(GalleryAttachment(url: fileURL, folderRelativePath: relativePath, fileName: fileURL.lastPathComponent))
+                }
+            } else {
+                let childRelativePath = relativePath.isEmpty ? itemURL.lastPathComponent : "\(relativePath)/\(itemURL.lastPathComponent)"
+                walk(itemURL, relativePath: childRelativePath, results: &results)
             }
         }
-        return results
     }
 
     /// Finds the entry (if any) whose body references this attachment via
-    /// "![](Attachments/<filename>)". Scoped to entries in the same month
-    /// since attachment references are always month-relative.
+    /// "![](Attachments/<filename>)". Scoped to entries in the same folder,
+    /// since attachment references are always folder-relative (see
+    /// EntryEditorView's attachmentsFolder computation).
     static func owningEntry(for attachment: GalleryAttachment, in entries: [JournalEntryRecord]) -> JournalEntryRecord? {
         entries.first { entry in
-            guard entry.monthKey == attachment.monthKey else { return false }
+            guard (entry.relativePath as NSString).deletingLastPathComponent == attachment.folderRelativePath else { return false }
             let nsBody = entry.searchableBody as NSString
             let matches = MarkdownTextView.imageReferencePattern.matches(in: entry.searchableBody, range: NSRange(location: 0, length: nsBody.length))
             return matches.contains { match in

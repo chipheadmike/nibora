@@ -91,7 +91,7 @@ struct AttachmentsGalleryView: View {
                     .frame(width: image.size.width * scale, height: image.size.height * scale)
             }
 
-            Text(attachment.monthKey)
+            Text(attachment.folderRelativePath.isEmpty ? "Vault Root" : attachment.folderRelativePath)
                 .font(.caption)
                 .foregroundStyle(.secondary)
 

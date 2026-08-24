@@ -22,6 +22,15 @@ final class EntryIndexer {
     /// added after an entry was last indexed (e.g. tags), not just structural
     /// changes.
     func rescanFullVault(at vaultURL: URL, force: Bool = false) {
+        switch VaultTypeConfig.read(from: vaultURL) {
+        case .journal:
+            rescanJournalVault(at: vaultURL, force: force)
+        case .freeform:
+            rescanFreeformVault(at: vaultURL, force: force)
+        }
+    }
+
+    private func rescanJournalVault(at vaultURL: URL, force: Bool) {
         let fileManager = FileManager.default
         var seenRelativePaths = Set<String>()
 
@@ -46,6 +55,47 @@ final class EntryIndexer {
 
         pruneMissingEntries(keeping: seenRelativePaths)
         try? modelContext.save()
+    }
+
+    /// Unlike the Journal walk (exactly one level: month folders, then
+    /// files), Freeform entries can live at any depth in any user-created
+    /// folder structure, so this walks the whole tree. Attachments folders
+    /// are skipped so a dropped image never gets mistaken for an entry;
+    /// .skipsHiddenFiles already excludes .nibora.
+    ///
+    /// Deliberately NOT FileManager.enumerator(at:) — confirmed via a
+    /// standalone unsandboxed test that the enumeration logic itself is
+    /// correct, but under App Sandbox it silently stopped after the first
+    /// subdirectory and returned zero files, with no thrown error to catch.
+    /// That method's default error handler (nil) aborts the whole walk on
+    /// its first hiccup rather than skipping just the problem item. Manual
+    /// recursion via contentsOfDirectory — the same call the Journal walk
+    /// above already uses successfully under sandbox, one level at a time —
+    /// sidesteps that entirely.
+    private func rescanFreeformVault(at vaultURL: URL, force: Bool) {
+        var seenRelativePaths = Set<String>()
+        walkFreeformFolder(vaultURL, vaultURL: vaultURL, seenRelativePaths: &seenRelativePaths, force: force)
+        pruneMissingEntries(keeping: seenRelativePaths)
+        try? modelContext.save()
+    }
+
+    private func walkFreeformFolder(_ folderURL: URL, vaultURL: URL, seenRelativePaths: inout Set<String>, force: Bool) {
+        guard let contents = try? FileManager.default.contentsOfDirectory(
+            at: folderURL,
+            includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+
+        for itemURL in contents {
+            let isDirectory = (try? itemURL.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+            if isDirectory {
+                guard itemURL.lastPathComponent != "Attachments" else { continue }
+                walkFreeformFolder(itemURL, vaultURL: vaultURL, seenRelativePaths: &seenRelativePaths, force: force)
+            } else if itemURL.pathExtension == "md" {
+                seenRelativePaths.insert(EntryFileWriter.relativePath(of: itemURL, in: vaultURL))
+                reindexSingleFile(at: itemURL, vaultURL: vaultURL, force: force)
+            }
+        }
     }
 
     /// Re-indexes one file, skipping the parse if its on-disk modification
