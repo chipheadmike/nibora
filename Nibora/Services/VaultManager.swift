@@ -31,6 +31,7 @@ final class VaultManager {
     private(set) var displayPath: String?
     private(set) var recentVaults: [VaultInfo] = []
     private(set) var currentVaultID: UUID?
+    private(set) var currentVaultType: VaultType = .journal
 
     private let recentsDefaultsKey = "vaultRecents"
     private let currentVaultIDDefaultsKey = "currentVaultID"
@@ -68,7 +69,23 @@ final class VaultManager {
         panel.message = "Choose a folder where Nibora will store your journal entries."
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        if VaultTypeConfig.isFreshFolder(url) {
+            VaultTypeConfig.write(Self.promptForVaultType(), to: url)
+        }
+
         addOrSwitch(to: url)
+    }
+
+    /// Asked once, only for a folder with nothing in it yet — an
+    /// already-populated vault's type is fixed (see VaultTypeConfig).
+    private static func promptForVaultType() -> VaultType {
+        let alert = NSAlert()
+        alert.messageText = "What kind of vault is this?"
+        alert.informativeText = "Journal: one page per day, like a daily journal. Freeform: unlimited entries with your own titles, organized into folders — more like a general notes app. This can't be changed later."
+        alert.addButton(withTitle: "Journal")
+        alert.addButton(withTitle: "Freeform")
+        return alert.runModal() == .alertFirstButtonReturn ? .journal : .freeform
     }
 
     func changeVault() {
@@ -98,6 +115,7 @@ final class VaultManager {
         vaultURL = url
         displayPath = info.displayPath
         currentVaultID = info.id
+        currentVaultType = VaultTypeConfig.read(from: url)
         UserDefaults.standard.set(info.id.uuidString, forKey: currentVaultIDDefaultsKey)
 
         if let index = recentVaults.firstIndex(where: { $0.id == info.id }) {
@@ -122,6 +140,7 @@ final class VaultManager {
         vaultURL = nil
         displayPath = nil
         currentVaultID = nil
+        currentVaultType = .journal
         UserDefaults.standard.removeObject(forKey: currentVaultIDDefaultsKey)
 
         if let next = recentVaults.max(by: { $0.lastOpenedAt < $1.lastOpenedAt }) {
@@ -152,6 +171,7 @@ final class VaultManager {
         vaultURL = url
         displayPath = standardizedPath
         currentVaultID = info.id
+        currentVaultType = VaultTypeConfig.read(from: url)
         UserDefaults.standard.set(info.id.uuidString, forKey: currentVaultIDDefaultsKey)
     }
 

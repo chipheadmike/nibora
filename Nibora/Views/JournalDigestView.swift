@@ -12,6 +12,8 @@ import FoundationModels
 /// and a date-range window instead of a user-typed question.
 struct JournalDigestView: View {
     let entries: [JournalEntryRecord]
+    /// Streaks assume one entry per day, which only Journal vaults do.
+    var showStreak: Bool = true
 
     @Environment(\.dismiss) private var dismiss
     @Environment(AIProviderPreferences.self) private var aiProviderPreferences
@@ -149,7 +151,9 @@ struct JournalDigestView: View {
         HStack(spacing: 20) {
             statTile("Entries", "\(periodStats.totalEntries)")
             statTile("Words", Self.numberFormatter.string(from: NSNumber(value: periodStats.totalWords)) ?? "\(periodStats.totalWords)")
-            statTile("Longest Streak", periodStats.longestStreak == 1 ? "1 day" : "\(periodStats.longestStreak) days")
+            if showStreak {
+                statTile("Longest Streak", periodStats.longestStreak == 1 ? "1 day" : "\(periodStats.longestStreak) days")
+            }
         }
     }
 

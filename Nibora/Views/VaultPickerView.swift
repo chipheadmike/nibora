@@ -18,7 +18,7 @@ struct VaultPickerView: View {
                 .font(.title)
                 .bold()
 
-            Text("Choose a folder where your journal entries will live. This can be an existing folder in iCloud Drive, Dropbox, or anywhere else on your Mac.")
+            Text("Choose a folder where your entries will live. This can be an existing folder in iCloud Drive, Dropbox, or anywhere else on your Mac. Picking an empty folder will ask whether you want a daily Journal or a Freeform notebook with your own folders.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

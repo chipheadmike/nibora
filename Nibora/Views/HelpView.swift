@@ -41,7 +41,18 @@ struct HelpView: View {
     private static let manualText = """
     # Welcome to Nibora
 
-    Nibora is a plain-markdown journal. Every entry is a real `.md` file on disk, organized into `YYYY-MM` month folders — nothing lives locked in a database. The app is just a nice window onto files you fully own.
+    Nibora is a plain-markdown notebook. Every entry is a real `.md` file on disk — nothing lives locked in a database. The app is just a nice window onto files you fully own.
+
+    ---
+
+    ## Vault Types
+
+    Chosen once, when a vault is first created — not changeable afterward.
+
+    - **Journal** — one page per day, like a daily journal. Entries are organized into `YYYY-MM` month folders and named by date. New Entry always creates (or opens) today's page.
+    - **Freeform** — unlimited entries with your own titles, organized into folders you create yourself, more like a general notes app. New Entry always asks for a title. Since there's no daily cadence here, streaks, reminders, On This Day, and the Writing Calendar heatmap don't apply and are hidden — everything else (tags, wikilinks, backlinks, AI features, themes, and so on) works exactly the same as in a Journal vault.
+
+    Opening a brand-new empty folder as a vault asks which type to make it. Opening a folder that's already a vault (or already has files in it) just opens it as whatever it already is — every vault that existed before this feature defaults to Journal, silently, with no visible change.
 
     ---
 
@@ -72,17 +83,22 @@ struct HelpView: View {
     ## Toolbar
 
     In the sidebar:
-    - **New Entry** — creates today's entry (hidden once today's entry exists)
+    - **New Entry** — Journal: creates today's entry (hidden once today's entry exists). Freeform: asks for a title and creates it at the vault's root — for a specific folder instead, right-click that folder and use its own New Entry
     - **Rescan Vault** — fully re-parses every file, useful after editing files outside the app, or after enabling a feature that needs to backfill older entries
     - **Vaults** — switch between every vault folder you've ever opened, or open another one. The current vault shows a checkmark. Also manageable from Settings > General, where each recent vault can be removed from the list (this only forgets it — nothing on disk is touched)
-    - **On This Day** — past entries from today's date in previous years
+    - **On This Day** (Journal only) — past entries from today's date in previous years
     - **Random Entry** — jumps to a random entry
-    - **Journal Stats** — total entries, total words, writing streaks, a recent-mood indicator with a trend chart, a chart of what time of day you tend to write, and a word cloud of your most frequent words — all inferred automatically on-device, nothing is sent anywhere to compute it
+    - **Journal Stats** — total entries, total words, a recent-mood indicator with a trend chart, a chart of what time of day you tend to write, and a word cloud of your most frequent words — all inferred automatically on-device, nothing is sent anywhere to compute it. Writing streaks too, in a Journal vault
     - **Entry Graph** — a node graph of entries connected by `[[wikilinks]]`
     - **Ask Nibora** — ask questions about your own journal in plain English. Uses whichever AI provider is selected in Settings > AI: On-Device (Apple Intelligence, free and fully local), or your own Claude or ChatGPT API key (journal excerpts are sent to that provider's servers, billed per-use to your own account)
     - **Journal Digest** — entry/word counts, a mood chart, a word cloud, and an AI-generated recap for the past 7 days, 30 days, or year (a built-in "Year in Review"), surfacing recurring themes and mood shifts. Same provider and privacy rules as Ask Nibora
-    - **Writing Calendar** — a GitHub-style heatmap of writing activity over the past year; click a day to jump to that entry
+    - **Writing Calendar** (Journal only) — a GitHub-style heatmap of writing activity over the past year; click a day to jump to that entry
     - **Attachments** — every image across the whole vault in one browsable grid, not just the current entry's
+
+    In a Freeform vault's sidebar specifically:
+    - Right-click a folder for its own **New Entry**, **New Folder**, **Rename…**, and **Delete…** (a folder must be empty to delete — move or remove what's inside first)
+    - Right-click an entry for **Move to Root** or **Delete…**
+    - Drag an entry onto a folder to move it there
 
     In an entry:
     - **Read Aloud** (speaker icon) — reads the entry aloud, with markdown syntax stripped to clean prose first. Voice, rate, and pitch are configurable in Settings > Editor
@@ -115,7 +131,7 @@ struct HelpView: View {
     ## Settings
 
     - **General** — vault location (and switching between every vault you've opened), window title, sort order (with an ascending/descending option for the date-based modes), and a one-click "Export Vault as Zip…" backup of everything.
-    - **Entries** — a reminder notification for days you haven't written yet, and optional named entry templates (with a `{{weekday}}` placeholder — with more than one, New Entry becomes a menu to pick from).
+    - **Entries** — a reminder notification for days you haven't written yet (Journal only), and optional named entry templates (with a `{{weekday}}` placeholder — with more than one, New Entry becomes a menu to pick from, in a Journal vault).
     - **Editor** — font/size, the timestamp hotkey, and Read Aloud's voice/rate/pitch (with a live preview button).
     - **Appearance** — a Display picker to override Light/Dark/System for Nibora only, and one-click theme presets.
     - **Colors** — a color picker for every styled markdown element (every color automatically nudges its brightness to stay legible in whichever Light/Dark mode is active), plus the code-block font.

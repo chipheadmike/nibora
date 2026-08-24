@@ -28,6 +28,8 @@ struct ContentView: View {
     @State private var isDigestPresented = false
     @State private var isHeatmapPresented = false
     @State private var isAttachmentsGalleryPresented = false
+    @State private var isFreeformNewEntryPresented = false
+    @State private var freeformNewEntryTitle = ""
 
     /// Backs the Cmd+K quick switcher — every entry, newest first. Also
     /// used to check for today's entry (see hasEntryForToday) instead of a
@@ -86,12 +88,21 @@ struct ContentView: View {
         .task(id: hasEntryForToday) {
             refreshReminderSchedule()
         }
+        .task(id: vaultManager.currentVaultType) {
+            refreshReminderSchedule()
+        }
         .onChange(of: reminderPreferences.isEnabled) { refreshReminderSchedule() }
         .onChange(of: reminderPreferences.reminderHour) { refreshReminderSchedule() }
         .onChange(of: reminderPreferences.reminderMinute) { refreshReminderSchedule() }
     }
 
     private func refreshReminderSchedule() {
+        // "Haven't written today" isn't a meaningful idea for a Freeform
+        // vault, so no reminder ever fires there — passing hasEntryForToday:
+        // true hits the scheduler's own cancel-pending branch regardless of
+        // whether the user has the toggle on (it's a global preference, not
+        // per-vault, so it may well be on from a Journal vault).
+        let hasEntryForToday = vaultManager.currentVaultType == .journal ? hasEntryForToday : true
         StreakReminderScheduler.refresh(preferences: reminderPreferences, hasEntryForToday: hasEntryForToday)
     }
 
@@ -117,30 +128,45 @@ struct ContentView: View {
     private var content: some View {
         if let vaultURL = vaultManager.vaultURL {
             NavigationSplitView {
-                SidebarView(selection: $selection, vaultURL: vaultURL, sortMode: sortPreferences.mode, sortDirection: sortPreferences.direction, searchText: searchText)
+                Group {
+                    if vaultManager.currentVaultType == .journal {
+                        SidebarView(selection: $selection, vaultURL: vaultURL, sortMode: sortPreferences.mode, sortDirection: sortPreferences.direction, searchText: searchText)
+                    } else {
+                        FreeformSidebarView(selection: $selection, vaultURL: vaultURL, searchText: searchText)
+                    }
+                }
                     .navigationSplitViewColumnWidth(min: 220, ideal: 260)
                     .toolbar {
-                        if !hasEntryForToday {
-                            ToolbarItem {
-                                if entryTemplatePreferences.isEnabled && entryTemplatePreferences.templates.count > 1 {
-                                    Menu {
-                                        ForEach(entryTemplatePreferences.templates) { template in
-                                            Button(template.name) {
-                                                createEntry(in: vaultURL, template: template)
+                        if vaultManager.currentVaultType == .journal {
+                            if !hasEntryForToday {
+                                ToolbarItem {
+                                    if entryTemplatePreferences.isEnabled && entryTemplatePreferences.templates.count > 1 {
+                                        Menu {
+                                            ForEach(entryTemplatePreferences.templates) { template in
+                                                Button(template.name) {
+                                                    createEntry(in: vaultURL, template: template)
+                                                }
                                             }
+                                            Divider()
+                                            Button("Blank Entry") {
+                                                createEntry(in: vaultURL, template: nil)
+                                            }
+                                        } label: {
+                                            Label("New Entry", systemImage: "square.and.pencil")
                                         }
-                                        Divider()
-                                        Button("Blank Entry") {
-                                            createEntry(in: vaultURL, template: nil)
+                                    } else {
+                                        Button("New Entry", systemImage: "square.and.pencil") {
+                                            let template = entryTemplatePreferences.isEnabled ? entryTemplatePreferences.defaultTemplate : nil
+                                            createEntry(in: vaultURL, template: template)
                                         }
-                                    } label: {
-                                        Label("New Entry", systemImage: "square.and.pencil")
                                     }
-                                } else {
-                                    Button("New Entry", systemImage: "square.and.pencil") {
-                                        let template = entryTemplatePreferences.isEnabled ? entryTemplatePreferences.defaultTemplate : nil
-                                        createEntry(in: vaultURL, template: template)
-                                    }
+                                }
+                            }
+                        } else {
+                            ToolbarItem {
+                                Button("New Entry", systemImage: "square.and.pencil") {
+                                    freeformNewEntryTitle = ""
+                                    isFreeformNewEntryPresented = true
                                 }
                             }
                         }
@@ -167,14 +193,16 @@ struct ContentView: View {
                                 Label("Vaults", systemImage: "externaldrive.badge.plus")
                             }
                         }
-                        ToolbarItem {
-                            Button("On This Day", systemImage: "calendar.badge.clock") {
-                                isOnThisDayPresented = true
-                            }
-                            .popover(isPresented: $isOnThisDayPresented) {
-                                OnThisDayView(entries: onThisDayEntries) { entry in
-                                    selection = entry
-                                    isOnThisDayPresented = false
+                        if vaultManager.currentVaultType == .journal {
+                            ToolbarItem {
+                                Button("On This Day", systemImage: "calendar.badge.clock") {
+                                    isOnThisDayPresented = true
+                                }
+                                .popover(isPresented: $isOnThisDayPresented) {
+                                    OnThisDayView(entries: onThisDayEntries) { entry in
+                                        selection = entry
+                                        isOnThisDayPresented = false
+                                    }
                                 }
                             }
                         }
@@ -189,7 +217,7 @@ struct ContentView: View {
                                 isJournalStatsPresented = true
                             }
                             .popover(isPresented: $isJournalStatsPresented) {
-                                JournalStatsView(stats: JournalStats.compute(from: allEntriesForSwitcher))
+                                JournalStatsView(stats: JournalStats.compute(from: allEntriesForSwitcher), showStreaks: vaultManager.currentVaultType == .journal)
                             }
                         }
                         ToolbarItem {
@@ -207,9 +235,11 @@ struct ContentView: View {
                                 isDigestPresented = true
                             }
                         }
-                        ToolbarItem {
-                            Button("Writing Calendar", systemImage: "square.grid.3x3.fill") {
-                                isHeatmapPresented = true
+                        if vaultManager.currentVaultType == .journal {
+                            ToolbarItem {
+                                Button("Writing Calendar", systemImage: "square.grid.3x3.fill") {
+                                    isHeatmapPresented = true
+                                }
                             }
                         }
                         ToolbarItem {
@@ -265,7 +295,7 @@ struct ContentView: View {
                 AskNiboraView(entries: allEntriesForSwitcher)
             }
             .sheet(isPresented: $isDigestPresented) {
-                JournalDigestView(entries: allEntriesForSwitcher)
+                JournalDigestView(entries: allEntriesForSwitcher, showStreak: vaultManager.currentVaultType == .journal)
             }
             .sheet(isPresented: $isHeatmapPresented) {
                 CalendarHeatmapView(entries: allEntriesForSwitcher) { date in
@@ -280,6 +310,15 @@ struct ContentView: View {
                     selection = entry
                     isAttachmentsGalleryPresented = false
                 }
+            }
+            .alert("New Entry", isPresented: $isFreeformNewEntryPresented) {
+                TextField("Title", text: $freeformNewEntryTitle)
+                Button("Create") {
+                    createFreeformEntry(in: vaultURL, title: freeformNewEntryTitle)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Creates a new entry at the vault's root. Use a folder's own \"New Entry\" (right-click it) to create one inside that folder.")
             }
         } else {
             VaultPickerView()
@@ -317,6 +356,22 @@ struct ContentView: View {
         let fileURL = vaultURL.appendingPathComponent(relativePath)
         let indexer = EntryIndexer(modelContext: modelContext)
         indexer.reindexSingleFile(at: fileURL, vaultURL: vaultURL)
+
+        let descriptor = FetchDescriptor<JournalEntryRecord>(
+            predicate: #Predicate { $0.relativePath == relativePath }
+        )
+        selection = try? modelContext.fetch(descriptor).first
+    }
+
+    /// The toolbar's global "New Entry" for a Freeform vault — always
+    /// creates at the vault root. Folder-scoped creation happens from
+    /// FreeformSidebarView's own per-folder context menu instead.
+    private func createFreeformEntry(in vaultURL: URL, title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard let relativePath = try? EntryFileWriter.createFreeformEntry(title: trimmed, folderRelativePath: nil, in: vaultURL) else { return }
+        let fileURL = vaultURL.appendingPathComponent(relativePath)
+        EntryIndexer(modelContext: modelContext).reindexSingleFile(at: fileURL, vaultURL: vaultURL, force: true)
 
         let descriptor = FetchDescriptor<JournalEntryRecord>(
             predicate: #Predicate { $0.relativePath == relativePath }
