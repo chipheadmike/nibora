@@ -64,27 +64,11 @@ struct JournalStatsView: View {
                 Text("Frequent Words")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                wordCloud
+                WordCloudView(words: stats.topWords)
             }
         }
         .padding(16)
         .frame(width: 360)
-    }
-
-    private var wordCloud: some View {
-        let maxCount = stats.topWords.map(\.count).max() ?? 1
-        return FlowLayout(spacing: 6) {
-            ForEach(stats.topWords) { item in
-                Text(item.word)
-                    .font(.system(size: fontSize(for: item.count, max: maxCount), weight: .semibold))
-                    .foregroundStyle(Color.blue.opacity(0.5 + (Double(item.count) / Double(maxCount)) * 0.5))
-            }
-        }
-    }
-
-    private func fontSize(for count: Int, max: Int) -> CGFloat {
-        let ratio = max > 0 ? Double(count) / Double(max) : 0
-        return 12 + CGFloat(ratio) * 16
     }
 
     private static func hourLabel(_ hour: Int) -> String {
@@ -132,10 +116,32 @@ struct JournalStatsView: View {
     }()
 }
 
+/// A word-frequency cloud — shared between Journal Stats and the Journal
+/// Digest's Year in Review, so both render it identically.
+struct WordCloudView: View {
+    let words: [WordFrequency]
+
+    var body: some View {
+        let maxCount = words.map(\.count).max() ?? 1
+        FlowLayout(spacing: 6) {
+            ForEach(words) { item in
+                Text(item.word)
+                    .font(.system(size: fontSize(for: item.count, max: maxCount), weight: .semibold))
+                    .foregroundStyle(Color.blue.opacity(0.5 + (Double(item.count) / Double(maxCount)) * 0.5))
+            }
+        }
+    }
+
+    private func fontSize(for count: Int, max: Int) -> CGFloat {
+        let ratio = max > 0 ? Double(count) / Double(max) : 0
+        return 12 + CGFloat(ratio) * 16
+    }
+}
+
 /// Left-to-right wrapping layout for the word cloud — words vary in size,
 /// so a fixed grid doesn't fit; this packs each row as full as it'll go
 /// before wrapping, like text.
-private struct FlowLayout: Layout {
+struct FlowLayout: Layout {
     var spacing: CGFloat = 6
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {

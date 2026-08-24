@@ -10,6 +10,7 @@ import Foundation
 enum DigestPeriod: String, CaseIterable, Identifiable {
     case week
     case month
+    case year
 
     var id: String { rawValue }
 
@@ -17,6 +18,7 @@ enum DigestPeriod: String, CaseIterable, Identifiable {
         switch self {
         case .week: return "Past 7 Days"
         case .month: return "Past 30 Days"
+        case .year: return "Past Year"
         }
     }
 
@@ -24,6 +26,7 @@ enum DigestPeriod: String, CaseIterable, Identifiable {
         switch self {
         case .week: return 7
         case .month: return 30
+        case .year: return 365
         }
     }
 }
@@ -122,10 +125,23 @@ final class JournalQueryService {
     /// unlike contextBlock this doesn't also score/limit by keyword — it
     /// includes everything in the period, just truncated per-entry to keep
     /// the total prompt size reasonable.
-    private static func digestContextBlock(for entries: [JournalEntryRecord], characterLimitPerEntry: Int = 600) -> String {
-        entries
+    private static func digestContextBlock(for entries: [JournalEntryRecord], characterLimitPerEntry: Int = 600, maxEntries: Int = 50) -> String {
+        Self.sampled(entries, maxCount: maxEntries)
             .map { entry in "[\(dateFormatter.string(from: entry.date))] \(entry.title): \(entry.searchableBody.prefix(characterLimitPerEntry))" }
             .joined(separator: "\n\n")
+    }
+
+    /// Evenly spaced across the full range rather than just the most recent
+    /// — a year's worth of daily entries would otherwise blow well past any
+    /// provider's context window (on-device especially), so long periods
+    /// like Year in Review get representative coverage instead of everything.
+    private static func sampled(_ entries: [JournalEntryRecord], maxCount: Int) -> [JournalEntryRecord] {
+        guard entries.count > maxCount else { return entries }
+        let stride = Double(entries.count) / Double(maxCount)
+        return (0..<maxCount).compactMap { i in
+            let index = Int(Double(i) * stride)
+            return index < entries.count ? entries[index] : nil
+        }
     }
 
     private static let dateFormatter: DateFormatter = {

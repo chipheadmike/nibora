@@ -15,14 +15,32 @@ struct QuickCaptureView: View {
     @Environment(EntryTemplatePreferences.self) private var entryTemplatePreferences
     @Environment(\.modelContext) private var modelContext
 
+    @Query(sort: \JournalEntryRecord.date, order: .reverse) private var allEntries: [JournalEntryRecord]
+
     @State private var text = ""
     @State private var statusMessage: String?
     @FocusState private var isFocused: Bool
+
+    private var stats: JournalStats {
+        JournalStats.compute(from: allEntries)
+    }
+
+    private var glanceText: String {
+        let streak = stats.currentStreak == 1 ? "1 day streak" : "\(stats.currentStreak) day streak"
+        let words = JournalActivity.todaysWordCount(from: allEntries)
+        return words > 0 ? "\(streak) · \(words) words today" : streak
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Quick Capture")
                 .font(.headline)
+
+            if stats.currentStreak > 0 {
+                Text(glanceText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             TextEditor(text: $text)
                 .font(.body)
