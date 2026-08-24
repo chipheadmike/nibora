@@ -192,6 +192,11 @@ struct EntryEditorView: View {
         // it reindexed right back into existence.
         guard isLoaded, entry.modelContext != nil else { return }
         EntryHistoryService.snapshotIfNeeded(fileURL: fileURL)
+
+        // Read what's still on disk (pre-overwrite) so we can tell which
+        // image references, if any, were just removed from the text.
+        let oldBody = (try? String(contentsOf: fileURL, encoding: .utf8)).map { MarkdownFrontmatterParser.parse($0).body } ?? ""
+
         let frontmatter = EntryFrontmatter(
             id: entry.id,
             title: title,
@@ -203,6 +208,7 @@ struct EntryEditorView: View {
         )
 
         try? EntryFileWriter.write(frontmatter: frontmatter, body: bodyText, to: fileURL)
+        ImageAttachmentService.pruneRemovedImages(oldBody: oldBody, newBody: bodyText, attachmentsFolder: fileURL.deletingLastPathComponent().appendingPathComponent("Attachments"))
         // force: true — see the identical comment in SidebarView's
         // persistEntryFrontmatter; we just wrote this file ourselves.
         EntryIndexer(modelContext: modelContext).reindexSingleFile(at: fileURL, vaultURL: vaultURL, force: true)

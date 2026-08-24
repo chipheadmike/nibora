@@ -32,7 +32,7 @@ struct OrphanedAttachmentsView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(orphan.fileName)
-                                Text(orphan.monthKey)
+                                Text(orphan.folderRelativePath.isEmpty ? "Vault Root" : orphan.folderRelativePath)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
