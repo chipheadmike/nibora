@@ -22,12 +22,15 @@ enum EntryPDFExporter {
         textView.string = body
         textView.font = EditorFontSet(fontName: fontPreferences.fontName, fontSize: fontPreferences.fontSize).regular
 
-        MarkdownTextView.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences)
+        // A PDF page is always white regardless of the app's current
+        // appearance, so colors are always resolved for light mode here —
+        // not whatever ColorScheme happens to be active when exporting.
+        MarkdownTextView.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, colorScheme: .light)
 
         if let textStorage = textView.textStorage, !title.isEmpty {
             let titleAttributes: [NSAttributedString.Key: Any] = [
                 .font: NSFont.boldSystemFont(ofSize: 20),
-                .foregroundColor: NSColor(theme.bodyColor)
+                .foregroundColor: NSColor(ResolvedTheme(theme, for: .light).bodyColor)
             ]
             textStorage.insert(NSAttributedString(string: "\(title)\n\n", attributes: titleAttributes), at: 0)
         }

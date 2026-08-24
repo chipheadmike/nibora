@@ -5,6 +5,29 @@
 
 import Foundation
 
+/// A rolling window (not a calendar week/month) so the digest is always
+/// meaningful regardless of what day it is — no partial-week edge cases.
+enum DigestPeriod: String, CaseIterable, Identifiable {
+    case week
+    case month
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .week: return "Past 7 Days"
+        case .month: return "Past 30 Days"
+        }
+    }
+
+    var dayCount: Int {
+        switch self {
+        case .week: return 7
+        case .month: return 30
+        }
+    }
+}
+
 /// Routes a journal question to whichever AI backend the user has selected
 /// (see AIProviderPreferences) — the relevant-excerpt retrieval below is
 /// shared across all three providers; only the "send it to a model" step
@@ -35,6 +58,20 @@ final class JournalQueryService {
     func ask(_ question: String, entries: [JournalEntryRecord]) async throws -> String {
         let context = Self.contextBlock(for: question, entries: entries)
         return try await makeProvider().ask(question: question, context: context)
+    }
+
+    /// Unlike `ask`, this feeds the model every entry in range (chronological,
+    /// not keyword-scored) since a digest needs the whole period, not just
+    /// the parts that match a query.
+    static func entriesInRange(_ entries: [JournalEntryRecord], for period: DigestPeriod) -> [JournalEntryRecord] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -period.dayCount, to: Calendar.current.startOfDay(for: Date())) ?? Date()
+        return entries.filter { $0.date >= cutoff }.sorted { $0.date < $1.date }
+    }
+
+    func summarize(entries: [JournalEntryRecord], period: DigestPeriod) async throws -> String {
+        let prompt = "Summarize my journal entries from the \(period.label.lowercased()). Identify recurring themes, notable events, and how my mood seemed to shift, in a few short paragraphs. Write directly to me, in second person, as a reflective summary — not a list of dates."
+        let context = Self.digestContextBlock(for: entries)
+        return try await makeProvider().ask(question: prompt, context: context)
     }
 
     private func makeProvider() -> JournalAIProvider {
@@ -79,6 +116,16 @@ final class JournalQueryService {
             return Array(entries.sorted { $0.date > $1.date }.prefix(limit))
         }
         return Array(matched.prefix(limit).map(\.entry))
+    }
+
+    /// Entries here are already date-range-filtered (via entriesInRange), so
+    /// unlike contextBlock this doesn't also score/limit by keyword — it
+    /// includes everything in the period, just truncated per-entry to keep
+    /// the total prompt size reasonable.
+    private static func digestContextBlock(for entries: [JournalEntryRecord], characterLimitPerEntry: Int = 600) -> String {
+        entries
+            .map { entry in "[\(dateFormatter.string(from: entry.date))] \(entry.title): \(entry.searchableBody.prefix(characterLimitPerEntry))" }
+            .joined(separator: "\n\n")
     }
 
     private static let dateFormatter: DateFormatter = {
