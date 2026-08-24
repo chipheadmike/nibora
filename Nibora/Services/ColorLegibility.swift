@@ -58,8 +58,12 @@ struct ResolvedTheme {
     let tagColor: Color
     let wikilinkColor: Color
     private let headingColors: [Color]
+    private let colorScheme: ColorScheme
+    private let tagColorPreferences: TagColorPreferences?
 
-    init(_ theme: ThemeManager, for colorScheme: ColorScheme) {
+    init(_ theme: ThemeManager, for colorScheme: ColorScheme, tagColorPreferences: TagColorPreferences? = nil) {
+        self.colorScheme = colorScheme
+        self.tagColorPreferences = tagColorPreferences
         func adjusted(_ color: Color) -> Color {
             Color(NSColor(color).legibilityAdjusted(for: colorScheme))
         }
@@ -83,5 +87,12 @@ struct ResolvedTheme {
     func color(forHeadingLevel level: Int) -> Color {
         let index = min(max(level - 1, 0), headingColors.count - 1)
         return headingColors[index]
+    }
+
+    /// Falls back to the uniform tagColor when this tag has no custom
+    /// color assigned, or no TagColorPreferences was supplied at all.
+    func color(forTag tag: String) -> Color {
+        guard let custom = tagColorPreferences?.color(for: tag) else { return tagColor }
+        return Color(NSColor(custom).legibilityAdjusted(for: colorScheme))
     }
 }

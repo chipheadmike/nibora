@@ -36,9 +36,64 @@ struct JournalStatsView: View {
                 .chartXAxis(.hidden)
                 .frame(height: 90)
             }
+
+            if stats.totalEntries > 0 {
+                Divider()
+                Text("When You Write")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Chart(stats.hourlyActivity) { item in
+                    BarMark(x: .value("Hour", item.hour), y: .value("Entries", item.count))
+                        .foregroundStyle(.blue)
+                }
+                .chartXAxis {
+                    AxisMarks(values: [0, 6, 12, 18]) { value in
+                        AxisValueLabel {
+                            if let hour = value.as(Int.self) {
+                                Text(Self.hourLabel(hour))
+                            }
+                        }
+                    }
+                }
+                .chartYAxis(.hidden)
+                .frame(height: 80)
+            }
+
+            if !stats.topWords.isEmpty {
+                Divider()
+                Text("Frequent Words")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                wordCloud
+            }
         }
         .padding(16)
-        .frame(width: 320)
+        .frame(width: 360)
+    }
+
+    private var wordCloud: some View {
+        let maxCount = stats.topWords.map(\.count).max() ?? 1
+        return FlowLayout(spacing: 6) {
+            ForEach(stats.topWords) { item in
+                Text(item.word)
+                    .font(.system(size: fontSize(for: item.count, max: maxCount), weight: .semibold))
+                    .foregroundStyle(Color.blue.opacity(0.5 + (Double(item.count) / Double(maxCount)) * 0.5))
+            }
+        }
+    }
+
+    private func fontSize(for count: Int, max: Int) -> CGFloat {
+        let ratio = max > 0 ? Double(count) / Double(max) : 0
+        return 12 + CGFloat(ratio) * 16
+    }
+
+    private static func hourLabel(_ hour: Int) -> String {
+        switch hour {
+        case 0: return "12am"
+        case 12: return "12pm"
+        case 1..<12: return "\(hour)am"
+        default: return "\(hour - 12)pm"
+        }
     }
 
     private func statRow(label: String, value: String) -> some View {
@@ -75,4 +130,52 @@ struct JournalStatsView: View {
         formatter.numberStyle = .decimal
         return formatter
     }()
+}
+
+/// Left-to-right wrapping layout for the word cloud — words vary in size,
+/// so a fixed grid doesn't fit; this packs each row as full as it'll go
+/// before wrapping, like text.
+private struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var rowWidth: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var totalWidth: CGFloat = 0
+        var totalHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if rowWidth > 0, rowWidth + spacing + size.width > maxWidth {
+                totalHeight += rowHeight + spacing
+                totalWidth = max(totalWidth, rowWidth)
+                rowWidth = 0
+                rowHeight = 0
+            }
+            rowWidth += (rowWidth > 0 ? spacing : 0) + size.width
+            rowHeight = max(rowHeight, size.height)
+        }
+        totalHeight += rowHeight
+        totalWidth = max(totalWidth, rowWidth)
+        return CGSize(width: maxWidth.isFinite ? maxWidth : totalWidth, height: totalHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: .unspecified)
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+    }
 }

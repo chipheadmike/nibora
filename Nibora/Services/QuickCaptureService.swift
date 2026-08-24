@@ -32,15 +32,16 @@ enum QuickCaptureService {
             try EntryFileWriter.write(frontmatter: frontmatter, body: newBody, to: fileURL)
         } else {
             let title = titleDateFormatter.string(from: now)
-            let templateBody = entryTemplatePreferences.isEnabled
-                ? EntryTemplatePreferences.rendering(entryTemplatePreferences.templateText, for: now)
-                : ""
+            let templateBody = (entryTemplatePreferences.isEnabled ? entryTemplatePreferences.defaultTemplate?.text : nil)
+                .map { EntryTemplatePreferences.rendering($0, for: now) } ?? ""
             let body = templateBody.isEmpty ? timestampedLine : templateBody + "\n\n" + timestampedLine
             relativePath = try EntryFileWriter.createEntry(date: now, title: title, body: body, in: vaultURL)
         }
 
         let fileURL = vaultURL.appendingPathComponent(relativePath)
-        EntryIndexer(modelContext: modelContext).reindexSingleFile(at: fileURL, vaultURL: vaultURL)
+        // force: true — see the identical comment in SidebarView's
+        // persistEntryFrontmatter; we just wrote this file ourselves.
+        EntryIndexer(modelContext: modelContext).reindexSingleFile(at: fileURL, vaultURL: vaultURL, force: true)
         return relativePath
     }
 
