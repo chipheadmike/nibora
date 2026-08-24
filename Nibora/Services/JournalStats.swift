@@ -15,6 +15,18 @@ struct SentimentPoint: Identifiable {
     let score: Double
 }
 
+struct WordFrequency: Identifiable {
+    let id = UUID()
+    let word: String
+    let count: Int
+}
+
+struct HourlyActivity: Identifiable {
+    let id: Int
+    let hour: Int
+    let count: Int
+}
+
 struct JournalStats {
     let totalEntries: Int
     let totalWords: Int
@@ -22,6 +34,8 @@ struct JournalStats {
     let longestStreak: Int
     let sentimentPoints: [SentimentPoint]
     let recentAverageSentiment: Double
+    let topWords: [WordFrequency]
+    let hourlyActivity: [HourlyActivity]
 
     static func compute(from entries: [JournalEntryRecord]) -> JournalStats {
         let totalEntries = entries.count
@@ -72,7 +86,63 @@ struct JournalStats {
             currentStreak: currentStreak,
             longestStreak: longestStreak,
             sentimentPoints: sentimentPoints,
-            recentAverageSentiment: recentAverageSentiment
+            recentAverageSentiment: recentAverageSentiment,
+            topWords: computeTopWords(from: entries),
+            hourlyActivity: computeHourlyActivity(from: entries)
         )
     }
+
+    /// Frequency across the whole vault, common function words filtered
+    /// out. Not stemmed/lemmatized — "walk" and "walking" count separately
+    /// — a lightweight pass is enough for a glance-able cloud, not a
+    /// linguistic analysis.
+    private static func computeTopWords(from entries: [JournalEntryRecord], limit: Int = 30) -> [WordFrequency] {
+        var counts: [String: Int] = [:]
+        for entry in entries {
+            let words = entry.searchableBody.lowercased()
+                .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { $0.count > 2 && !wordCloudStopwords.contains($0) }
+            for word in words {
+                counts[word, default: 0] += 1
+            }
+        }
+        return counts
+            .sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
+            .prefix(limit)
+            .map { WordFrequency(word: $0.key, count: $0.value) }
+    }
+
+    /// Buckets by the hour an entry was first created (not last modified —
+    /// modifiedAt would skew toward whenever an entry was last touched,
+    /// which is a weaker signal of "when do I actually sit down to write"
+    /// than when it was started).
+    private static func computeHourlyActivity(from entries: [JournalEntryRecord]) -> [HourlyActivity] {
+        let calendar = Calendar.current
+        var counts = [Int: Int]()
+        for entry in entries {
+            let hour = calendar.component(.hour, from: entry.createdAt)
+            counts[hour, default: 0] += 1
+        }
+        return (0..<24).map { hour in HourlyActivity(id: hour, hour: hour, count: counts[hour] ?? 0) }
+    }
+
+    private static let wordCloudStopwords: Set<String> = [
+        "the", "and", "for", "are", "was", "were", "been", "being", "have", "has",
+        "had", "having", "this", "that", "these", "those", "with", "from", "into",
+        "about", "against", "between", "through", "during", "before", "after",
+        "above", "below", "again", "further", "then", "once", "here", "there",
+        "when", "where", "why", "how", "all", "any", "both", "each", "few",
+        "more", "most", "other", "some", "such", "nor", "not", "only", "own",
+        "same", "than", "too", "very", "can", "will", "just", "should", "now",
+        "did", "does", "doing", "what", "which", "who", "whom", "would", "could",
+        "you", "your", "yours", "yourself", "he", "him", "his", "she", "her",
+        "hers", "herself", "it", "its", "itself", "they", "them", "their",
+        "theirs", "themselves", "who", "whom", "and", "but", "because", "until",
+        "while", "off", "over", "under", "again", "out", "up", "down", "she's",
+        "i'm", "i've", "i'd", "i'll", "you're", "you've", "that's", "there's",
+        "don't", "didn't", "wasn't", "weren't", "isn't", "aren't", "haven't",
+        "hasn't", "hadn't", "couldn't", "wouldn't", "shouldn't", "im", "ive",
+        "id", "ill", "youre", "youve", "thats", "theres", "dont", "didnt",
+        "wasnt", "werent", "isnt", "arent", "havent", "hasnt", "hadnt"
+    ]
 }

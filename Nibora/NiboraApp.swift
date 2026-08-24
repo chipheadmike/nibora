@@ -12,6 +12,7 @@ import SwiftData
 struct NiboraApp: App {
     @State private var vaultManager = VaultManager()
     @State private var themeManager = ThemeManager()
+    @State private var tagColorPreferences = TagColorPreferences()
     @State private var sortPreferences = EntrySortPreferences()
     @State private var hotkeyPreferences = TimestampHotkeyPreferences()
     @State private var fontPreferences = FontPreferences()
@@ -20,10 +21,14 @@ struct NiboraApp: App {
     @State private var speechVoicePreferences = SpeechVoicePreferences()
     @State private var aiProviderPreferences = AIProviderPreferences()
     @State private var appAppearancePreferences = AppAppearancePreferences()
+    @State private var streakReminderPreferences = StreakReminderPreferences()
     @State private var passwordLockPreferences: PasswordLockPreferences
     @State private var appLockManager: AppLockManager
 
-    let sharedModelContainer: ModelContainer = {
+    /// Static so CaptureJournalEntryIntent — a standalone struct with no
+    /// access to this App instance's @State — can reach the same
+    /// persistent store when Siri/Shortcuts invokes it.
+    static let sharedModelContainer: ModelContainer = {
         do {
             return try ModelContainer(for: JournalEntryRecord.self)
         } catch {
@@ -42,6 +47,7 @@ struct NiboraApp: App {
             ContentView()
                 .environment(vaultManager)
                 .environment(themeManager)
+                .environment(tagColorPreferences)
                 .environment(sortPreferences)
                 .environment(hotkeyPreferences)
                 .environment(fontPreferences)
@@ -50,11 +56,12 @@ struct NiboraApp: App {
                 .environment(speechVoicePreferences)
                 .environment(aiProviderPreferences)
                 .environment(appAppearancePreferences)
+                .environment(streakReminderPreferences)
                 .environment(passwordLockPreferences)
                 .environment(appLockManager)
                 .preferredColorScheme(appAppearancePreferences.mode.colorScheme)
         }
-        .modelContainer(sharedModelContainer)
+        .modelContainer(Self.sharedModelContainer)
 
         MenuBarExtra("Quick Capture", systemImage: "square.and.pencil") {
             QuickCaptureView()
@@ -62,12 +69,13 @@ struct NiboraApp: App {
                 .environment(entryTemplatePreferences)
         }
         .menuBarExtraStyle(.window)
-        .modelContainer(sharedModelContainer)
+        .modelContainer(Self.sharedModelContainer)
 
         Settings {
             SettingsView()
                 .environment(vaultManager)
                 .environment(themeManager)
+                .environment(tagColorPreferences)
                 .environment(sortPreferences)
                 .environment(hotkeyPreferences)
                 .environment(fontPreferences)
@@ -76,10 +84,11 @@ struct NiboraApp: App {
                 .environment(speechVoicePreferences)
                 .environment(aiProviderPreferences)
                 .environment(appAppearancePreferences)
+                .environment(streakReminderPreferences)
                 .environment(passwordLockPreferences)
                 .environment(appLockManager)
                 .preferredColorScheme(appAppearancePreferences.mode.colorScheme)
         }
-        .modelContainer(sharedModelContainer)
+        .modelContainer(Self.sharedModelContainer)
     }
 }

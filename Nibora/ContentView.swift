@@ -15,6 +15,7 @@ struct ContentView: View {
     @Environment(JournalTitlePreferences.self) private var journalTitlePreferences
     @Environment(EntryTemplatePreferences.self) private var entryTemplatePreferences
     @Environment(AppLockManager.self) private var appLockManager
+    @Environment(StreakReminderPreferences.self) private var reminderPreferences
     @Environment(\.modelContext) private var modelContext
     @State private var selection: JournalEntryRecord?
     @State private var searchText = ""
@@ -82,6 +83,16 @@ struct ContentView: View {
         .task {
             await watchForDayChange()
         }
+        .task(id: hasEntryForToday) {
+            refreshReminderSchedule()
+        }
+        .onChange(of: reminderPreferences.isEnabled) { refreshReminderSchedule() }
+        .onChange(of: reminderPreferences.reminderHour) { refreshReminderSchedule() }
+        .onChange(of: reminderPreferences.reminderMinute) { refreshReminderSchedule() }
+    }
+
+    private func refreshReminderSchedule() {
+        StreakReminderScheduler.refresh(preferences: reminderPreferences, hasEntryForToday: hasEntryForToday)
     }
 
     /// Sleeps until just past the next midnight, then bumps `currentDay` —
@@ -111,8 +122,25 @@ struct ContentView: View {
                     .toolbar {
                         if !hasEntryForToday {
                             ToolbarItem {
-                                Button("New Entry", systemImage: "square.and.pencil") {
-                                    createEntry(in: vaultURL)
+                                if entryTemplatePreferences.isEnabled && entryTemplatePreferences.templates.count > 1 {
+                                    Menu {
+                                        ForEach(entryTemplatePreferences.templates) { template in
+                                            Button(template.name) {
+                                                createEntry(in: vaultURL, template: template)
+                                            }
+                                        }
+                                        Divider()
+                                        Button("Blank Entry") {
+                                            createEntry(in: vaultURL, template: nil)
+                                        }
+                                    } label: {
+                                        Label("New Entry", systemImage: "square.and.pencil")
+                                    }
+                                } else {
+                                    Button("New Entry", systemImage: "square.and.pencil") {
+                                        let template = entryTemplatePreferences.isEnabled ? entryTemplatePreferences.defaultTemplate : nil
+                                        createEntry(in: vaultURL, template: template)
+                                    }
                                 }
                             }
                         }
@@ -281,12 +309,10 @@ struct ContentView: View {
         selection = match
     }
 
-    private func createEntry(in vaultURL: URL) {
+    private func createEntry(in vaultURL: URL, template: EntryTemplate?) {
         let now = Date()
         let title = Self.titleDateFormatter.string(from: now)
-        let body = entryTemplatePreferences.isEnabled
-            ? EntryTemplatePreferences.rendering(entryTemplatePreferences.templateText, for: now)
-            : ""
+        let body = template.map { EntryTemplatePreferences.rendering($0.text, for: now) } ?? ""
         guard let relativePath = try? EntryFileWriter.createEntry(date: now, title: title, body: body, in: vaultURL) else { return }
         let fileURL = vaultURL.appendingPathComponent(relativePath)
         let indexer = EntryIndexer(modelContext: modelContext)
@@ -311,6 +337,7 @@ struct ContentView: View {
     ContentView()
         .environment(VaultManager())
         .environment(ThemeManager())
+        .environment(TagColorPreferences())
         .environment(EntrySortPreferences())
         .environment(TimestampHotkeyPreferences())
         .environment(FontPreferences())
@@ -319,6 +346,7 @@ struct ContentView: View {
         .environment(SpeechVoicePreferences())
         .environment(AIProviderPreferences())
         .environment(AppAppearancePreferences())
+        .environment(StreakReminderPreferences())
         .environment(AppLockManager(preferences: PasswordLockPreferences()))
         .modelContainer(for: JournalEntryRecord.self, inMemory: true)
 }

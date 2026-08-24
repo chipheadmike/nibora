@@ -14,6 +14,8 @@ struct SettingsView: View {
         TabView {
             GeneralSettingsTab()
                 .tabItem { Label("General", systemImage: "gearshape") }
+            EntriesSettingsTab()
+                .tabItem { Label("Entries", systemImage: "doc.badge.plus") }
             EditorSettingsTab()
                 .tabItem { Label("Editor", systemImage: "textformat") }
             AppearanceSettingsTab()
@@ -32,14 +34,12 @@ private struct GeneralSettingsTab: View {
     @Environment(VaultManager.self) private var vaultManager
     @Environment(EntrySortPreferences.self) private var sortPreferences
     @Environment(JournalTitlePreferences.self) private var journalTitlePreferences
-    @Environment(EntryTemplatePreferences.self) private var entryTemplatePreferences
 
     @State private var backupStatusMessage: String?
 
     var body: some View {
         @Bindable var sortPreferences = sortPreferences
         @Bindable var journalTitlePreferences = journalTitlePreferences
-        @Bindable var entryTemplatePreferences = entryTemplatePreferences
 
         Form {
             Section("Vault") {
@@ -111,17 +111,6 @@ private struct GeneralSettingsTab: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Template") {
-                Toggle("Start new entries from a template", isOn: $entryTemplatePreferences.isEnabled)
-                TextEditor(text: $entryTemplatePreferences.templateText)
-                    .font(.body.monospaced())
-                    .frame(height: 120)
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
-                    .disabled(!entryTemplatePreferences.isEnabled)
-                Text("Applied as the starting body text whenever you create a new entry. Use {{weekday}} to insert the day's name, e.g. \"### {{weekday}}\" becomes \"### Monday\".")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
         }
         .formStyle(.grouped)
         .frame(width: 440)
@@ -150,6 +139,86 @@ private struct GeneralSettingsTab: View {
         formatter.timeZone = TimeZone.current
         return formatter
     }()
+}
+
+private struct EntriesSettingsTab: View {
+    @Environment(EntryTemplatePreferences.self) private var entryTemplatePreferences
+    @Environment(StreakReminderPreferences.self) private var reminderPreferences
+
+    var body: some View {
+        @Bindable var entryTemplatePreferences = entryTemplatePreferences
+        @Bindable var reminderPreferences = reminderPreferences
+
+        Form {
+            Section("Reminders") {
+                Toggle("Remind me if I haven't written yet", isOn: Binding(
+                    get: { reminderPreferences.isEnabled },
+                    set: { newValue in
+                        reminderPreferences.isEnabled = newValue
+                        if newValue {
+                            StreakReminderScheduler.requestAuthorizationIfNeeded()
+                        }
+                    }
+                ))
+                DatePicker("At", selection: $reminderPreferences.reminderTime, displayedComponents: .hourAndMinute)
+                    .disabled(!reminderPreferences.isEnabled)
+                Text("A single local notification, only on days you haven't written yet. Nothing is sent anywhere — this uses macOS's own notification scheduling.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Templates") {
+                Toggle("Offer a template when creating new entries", isOn: $entryTemplatePreferences.isEnabled)
+
+                ForEach($entryTemplatePreferences.templates) { $template in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            TextField("Name", text: $template.name)
+                                .textFieldStyle(.plain)
+                                .font(.headline)
+                            Spacer()
+                            if entryTemplatePreferences.defaultTemplateID == template.id {
+                                Text("Default")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Button("Make Default") {
+                                    entryTemplatePreferences.defaultTemplateID = template.id
+                                }
+                                .font(.caption)
+                                .buttonStyle(.borderless)
+                            }
+                            Button {
+                                entryTemplatePreferences.removeTemplate(template)
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                            .foregroundStyle(.red)
+                        }
+                        TextEditor(text: $template.text)
+                            .font(.body.monospaced())
+                            .frame(height: 100)
+                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
+                    }
+                    .padding(.vertical, 4)
+                    .disabled(!entryTemplatePreferences.isEnabled)
+                }
+
+                Button("Add Template") {
+                    entryTemplatePreferences.addTemplate()
+                }
+                .disabled(!entryTemplatePreferences.isEnabled)
+
+                Text("With more than one template, New Entry becomes a menu to pick which to start from (or a blank entry). With just one, New Entry uses it automatically. Use {{weekday}} to insert the day's name, e.g. \"### {{weekday}}\" becomes \"### Monday\".")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 440)
+        .fixedSize(horizontal: false, vertical: true)
+    }
 }
 
 private struct EditorSettingsTab: View {
@@ -665,5 +734,6 @@ private struct RecoveryCodeRevealView: View {
         .environment(AppLockManager(preferences: PasswordLockPreferences()))
         .environment(AIProviderPreferences())
         .environment(AppAppearancePreferences())
+        .environment(StreakReminderPreferences())
         .modelContainer(for: JournalEntryRecord.self, inMemory: true)
 }

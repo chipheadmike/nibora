@@ -16,6 +16,7 @@ struct EntryEditorView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(ThemeManager.self) private var themeManager
+    @Environment(TagColorPreferences.self) private var tagColorPreferences
     @Environment(TimestampHotkeyPreferences.self) private var hotkeyPreferences
     @Environment(FontPreferences.self) private var fontPreferences
     @Environment(SpeechVoicePreferences.self) private var speechVoicePreferences
@@ -72,6 +73,7 @@ struct EntryEditorView: View {
                     baseDirectory: fileURL.deletingLastPathComponent(),
                     saveImage: saveDroppedImage,
                     theme: themeManager,
+                    tagColorPreferences: tagColorPreferences,
                     hotkeyPreferences: hotkeyPreferences,
                     fontPreferences: fontPreferences,
                     isFocusModeEnabled: isFocusModeEnabled,
@@ -84,6 +86,7 @@ struct EntryEditorView: View {
                     MarkdownPreviewView(
                         markdownText: bodyText,
                         theme: themeManager,
+                        tagColorPreferences: tagColorPreferences,
                         fontPreferences: fontPreferences,
                         onWikilinkClick: onNavigateToEntry
                     )
@@ -181,7 +184,13 @@ struct EntryEditorView: View {
     }
 
     private func saveNow() {
-        guard isLoaded else { return }
+        // entry.modelContext goes nil once the entry has been deleted —
+        // without this guard, a debounced save (or the unconditional
+        // flush-save in onDisappear, which fires when this view is torn
+        // down for ANY reason, including the entry being deleted out from
+        // under it) can rewrite the just-trashed file back to disk and get
+        // it reindexed right back into existence.
+        guard isLoaded, entry.modelContext != nil else { return }
         EntryHistoryService.snapshotIfNeeded(fileURL: fileURL)
         let frontmatter = EntryFrontmatter(
             id: entry.id,
@@ -194,7 +203,9 @@ struct EntryEditorView: View {
         )
 
         try? EntryFileWriter.write(frontmatter: frontmatter, body: bodyText, to: fileURL)
-        EntryIndexer(modelContext: modelContext).reindexSingleFile(at: fileURL, vaultURL: vaultURL)
+        // force: true — see the identical comment in SidebarView's
+        // persistEntryFrontmatter; we just wrote this file ourselves.
+        EntryIndexer(modelContext: modelContext).reindexSingleFile(at: fileURL, vaultURL: vaultURL, force: true)
     }
 
     private func toggleReadAloud() {

@@ -13,13 +13,14 @@ import SwiftUI
 struct MarkdownPreviewView: View {
     let markdownText: String
     let theme: ThemeManager
+    let tagColorPreferences: TagColorPreferences
     let fontPreferences: FontPreferences
     let onWikilinkClick: (String) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
 
     private var resolvedTheme: ResolvedTheme {
-        ResolvedTheme(theme, for: colorScheme)
+        ResolvedTheme(theme, for: colorScheme, tagColorPreferences: tagColorPreferences)
     }
 
     var body: some View {
@@ -135,7 +136,7 @@ struct MarkdownPreviewView: View {
 
     private func attributedText(_ line: String) -> AttributedString {
         let fonts = EditorFontSet(fontName: fontPreferences.fontName, fontSize: fontPreferences.fontSize, codeFontName: fontPreferences.codeFontName)
-        let nsAttributed = MarkdownTextView.inlineAttributedText(from: line, theme: theme, fonts: fonts, colorScheme: colorScheme)
+        let nsAttributed = MarkdownTextView.inlineAttributedText(from: line, theme: theme, fonts: fonts, colorScheme: colorScheme, tagColorPreferences: tagColorPreferences)
         return AttributedString(nsAttributed)
     }
 

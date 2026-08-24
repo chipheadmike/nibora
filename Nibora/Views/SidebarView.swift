@@ -14,6 +14,7 @@ struct SidebarView: View {
     let searchText: String
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(TagColorPreferences.self) private var tagColorPreferences
 
     @Query private var entries: [JournalEntryRecord]
 
@@ -21,6 +22,10 @@ struct SidebarView: View {
     @State private var entryPendingDeletion: JournalEntryRecord?
     @State private var collapsedMonths: Set<String> = []
     @State private var selectedTag: String?
+    @State private var tagPendingRename: String?
+    @State private var renameText = ""
+    @State private var tagColorPickerTag: String?
+    @State private var tagPendingDeletion: String?
 
     /// Custom init so the within-month sort descriptor can vary with
     /// `sortMode` — SwiftData re-evaluates the fetch whenever this view is
@@ -78,6 +83,42 @@ struct SidebarView: View {
         return tags.sorted()
     }
 
+    private func pillBackground(for tag: String) -> Color {
+        let custom = tagColorPreferences.color(for: tag)
+        if selectedTag == tag {
+            return custom ?? Color.accentColor
+        }
+        return custom?.opacity(0.2) ?? Color.secondary.opacity(0.15)
+    }
+
+    private func pillForeground(for tag: String) -> Color {
+        if selectedTag == tag {
+            return .white
+        }
+        return tagColorPreferences.color(for: tag) ?? Color.primary
+    }
+
+    /// A plain ColorPicker placed directly inside a .contextMenu renders
+    /// but isn't interactive — NSMenu-backed context menus only reliably
+    /// support simple buttons, not rich controls. A popover (already
+    /// working for the icon picker below) is the proven pattern here.
+    @ViewBuilder
+    private func tagColorPicker(for tag: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ColorPicker("Color for #\(tag)", selection: Binding(
+                get: { tagColorPreferences.color(for: tag) ?? Color.secondary },
+                set: { tagColorPreferences.setColor($0, for: tag) }
+            ), supportsOpacity: false)
+            if tagColorPreferences.color(for: tag) != nil {
+                Button("Reset to Default") {
+                    tagColorPreferences.setColor(nil, for: tag)
+                }
+            }
+        }
+        .padding()
+        .frame(width: 240)
+    }
+
     @ViewBuilder
     private var tagFilterRow: some View {
         if !allTags.isEmpty {
@@ -92,11 +133,35 @@ struct SidebarView: View {
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .background(
-                                    Capsule().fill(selectedTag == tag ? Color.accentColor : Color.secondary.opacity(0.15))
+                                    Capsule().fill(pillBackground(for: tag))
                                 )
-                                .foregroundStyle(selectedTag == tag ? Color.white : Color.primary)
+                                .foregroundStyle(pillForeground(for: tag))
                         }
                         .buttonStyle(.plain)
+                        .popover(isPresented: Binding(
+                            get: { tagColorPickerTag == tag },
+                            set: { isPresented in if !isPresented { tagColorPickerTag = nil } }
+                        )) {
+                            tagColorPicker(for: tag)
+                        }
+                        .contextMenu {
+                            Button("Set Color…") {
+                                tagColorPickerTag = tag
+                            }
+                            if tagColorPreferences.color(for: tag) != nil {
+                                Button("Reset Color") {
+                                    tagColorPreferences.setColor(nil, for: tag)
+                                }
+                            }
+                            Divider()
+                            Button("Rename or Merge…") {
+                                renameText = tag
+                                tagPendingRename = tag
+                            }
+                            Button("Delete Tag", role: .destructive) {
+                                tagPendingDeletion = tag
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 16)
@@ -176,19 +241,83 @@ struct SidebarView: View {
         } message: {
             Text("The entry's file will be moved to the Trash.")
         }
+        .alert(
+            "Rename “#\(tagPendingRename ?? "")”",
+            isPresented: Binding(
+                get: { tagPendingRename != nil },
+                set: { isPresented in if !isPresented { tagPendingRename = nil } }
+            )
+        ) {
+            TextField("New tag name", text: $renameText)
+            Button("Rename") {
+                if let tag = tagPendingRename {
+                    renameTag(tag, to: renameText)
+                }
+                tagPendingRename = nil
+            }
+            Button("Cancel", role: .cancel) {
+                tagPendingRename = nil
+            }
+        } message: {
+            Text("Applies across every entry that uses this tag. Renaming to a tag that already exists merges the two.")
+        }
+        .alert(
+            "Delete “#\(tagPendingDeletion ?? "")”?",
+            isPresented: Binding(
+                get: { tagPendingDeletion != nil },
+                set: { isPresented in if !isPresented { tagPendingDeletion = nil } }
+            )
+        ) {
+            Button("Delete", role: .destructive) {
+                if let tag = tagPendingDeletion {
+                    deleteTag(tag)
+                }
+                tagPendingDeletion = nil
+            }
+            Button("Cancel", role: .cancel) {
+                tagPendingDeletion = nil
+            }
+        } message: {
+            Text("Removes “#\(tagPendingDeletion ?? "")” from every entry that uses it. The rest of each entry is left untouched.")
+        }
     }
 
     private func deleteEntry(_ entry: JournalEntryRecord) {
         let fileURL = vaultURL.appendingPathComponent(entry.relativePath)
         try? FileManager.default.trashItem(at: fileURL, resultingItemURL: nil)
 
-        if selection?.id == entry.id {
-            selection = nil
-        }
-
+        // Delete from the model (and save) before clearing selection — this
+        // is what tears down EntryEditorView, whose onDisappear does an
+        // unconditional flush-save of any pending edit. That guards itself
+        // against a deleted entry by checking entry.modelContext == nil, so
+        // the model deletion needs to be visible before selection changes,
+        // not after — otherwise the flush can resurrect the just-trashed
+        // file and its record.
         SpotlightIndexer.remove(id: entry.id)
         modelContext.delete(entry)
         try? modelContext.save()
+
+        if selection?.id == entry.id {
+            selection = nil
+        }
+    }
+
+    private func renameTag(_ tag: String, to newName: String) {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        TagManagementService.rename(tag: tag, to: trimmed, entries: entries, vaultURL: vaultURL, modelContext: modelContext)
+        tagColorPreferences.handleRename(from: tag, to: trimmed)
+        if selectedTag == tag {
+            selectedTag = trimmed.lowercased()
+        }
+    }
+
+    private func deleteTag(_ tag: String) {
+        TagManagementService.delete(tag: tag, entries: entries, vaultURL: vaultURL, modelContext: modelContext)
+        tagColorPreferences.handleDelete(tag)
+        if selectedTag == tag {
+            selectedTag = nil
+        }
     }
 
     private enum MoveDirection { case up, down }
@@ -245,7 +374,14 @@ struct SidebarView: View {
             sortOrder: entry.sortOrder
         )
         try? EntryFileWriter.write(frontmatter: frontmatter, body: body, to: fileURL)
-        EntryIndexer(modelContext: modelContext).reindexSingleFile(at: fileURL, vaultURL: vaultURL)
+        // force: true — we just wrote this file ourselves, so we already
+        // know it changed. The mtime-skip check reindexSingleFile normally
+        // does exists for the passive full-vault rescan; here it's actively
+        // wrong, since some filesystems (this app's own vault has run on a
+        // network volume) round timestamps coarsely enough that two writes
+        // moments apart can land on the same reported mtime, making the
+        // check silently skip indexing this real change.
+        EntryIndexer(modelContext: modelContext).reindexSingleFile(at: fileURL, vaultURL: vaultURL, force: true)
     }
 
     private func monthTitle(for monthKey: String) -> String {
