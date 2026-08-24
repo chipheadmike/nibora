@@ -74,7 +74,7 @@ struct HelpView: View {
     - `[[Entry Title]]` to link directly to another entry by its exact title — Cmd+Click to jump there
     - `#tag` anywhere in a line — filterable from the sidebar
 
-    Drag or paste an image into an entry and it's saved into that month's Attachments folder and shown in the strip below the editor.
+    Drag or paste an image into an entry and it's saved into that month's Attachments folder and shown in the strip below the editor. Deleting the image from the text moves its file to the Trash too, automatically, the next time the entry saves.
 
     Entries are also indexed into macOS's system-wide Spotlight search (Cmd+Space) — search from anywhere on your Mac and clicking a result jumps straight into that entry, entirely on-device.
 
@@ -135,7 +135,7 @@ struct HelpView: View {
     - **Editor** — font/size, the timestamp hotkey, and Read Aloud's voice/rate/pitch (with a live preview button).
     - **Appearance** — a Display picker to override Light/Dark/System for Nibora only, and one-click theme presets.
     - **Colors** — a color picker for every styled markdown element (every color automatically nudges its brightness to stay legible in whichever Light/Dark mode is active), plus the code-block font.
-    - **Import** — bring in Markdown files from another app, and scan for orphaned attachment images no entry references anymore.
+    - **Import** — bring in Markdown files from another app, and scan for orphaned attachment images no entry references anymore (mainly catches leftovers from a deleted entry or files edited outside the app — removing an image from an entry's text already cleans up its file automatically).
     - **Password** — optional privacy-screen lock with a lock timer, a one-time recovery code, and an optional recovery email — if forgotten, the lock screen can open a pre-filled Mail.app draft with a temporary code, which you send to yourself and enter back in. This is a privacy screen, not encryption — entries stay plain text on disk either way.
     - **AI** — choose Ask Nibora's provider (On-Device, Claude, or ChatGPT) and enter your own API key for the cloud options. Keys are stored in this Mac's Keychain, never in plain text.
 
