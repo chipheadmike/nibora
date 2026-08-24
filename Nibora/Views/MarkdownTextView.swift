@@ -19,6 +19,7 @@ struct MarkdownTextView: NSViewRepresentable {
     let baseDirectory: URL
     let saveImage: (NSImage, String?) -> String?
     let theme: ThemeManager
+    let tagColorPreferences: TagColorPreferences
     let hotkeyPreferences: TimestampHotkeyPreferences
     let fontPreferences: FontPreferences
     let isFocusModeEnabled: Bool
@@ -99,8 +100,8 @@ struct MarkdownTextView: NSViewRepresentable {
         return String(nsLine.substring(with: match.range).dropFirst())
     }
 
-    static func inlineAttributedText(from line: String, theme: ThemeManager, fonts: EditorFontSet, colorScheme: ColorScheme) -> NSAttributedString {
-        let resolved = ResolvedTheme(theme, for: colorScheme)
+    static func inlineAttributedText(from line: String, theme: ThemeManager, fonts: EditorFontSet, colorScheme: ColorScheme, tagColorPreferences: TagColorPreferences? = nil) -> NSAttributedString {
+        let resolved = ResolvedTheme(theme, for: colorScheme, tagColorPreferences: tagColorPreferences)
         let result = NSMutableAttributedString()
         let nsLine = line as NSString
         let baseAttributes: [NSAttributedString.Key: Any] = [.font: fonts.regular, .foregroundColor: NSColor(resolved.bodyColor)]
@@ -161,7 +162,8 @@ struct MarkdownTextView: NSViewRepresentable {
                 result.append(NSAttributedString(string: content, attributes: [.font: fonts.regular, .foregroundColor: NSColor(resolved.bodyColor), .backgroundColor: NSColor(resolved.highlightColor)]))
             } else {
                 let content = nsLine.substring(with: match.range)
-                result.append(NSAttributedString(string: content, attributes: [.font: fonts.bold, .foregroundColor: NSColor(resolved.tagColor)]))
+                let tagColor = resolved.color(forTag: String(content.dropFirst()))
+                result.append(NSAttributedString(string: content, attributes: [.font: fonts.bold, .foregroundColor: NSColor(tagColor)]))
             }
 
             cursor = match.range.location + match.range.length
@@ -204,7 +206,7 @@ struct MarkdownTextView: NSViewRepresentable {
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = false
 
-        Self.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, colorScheme: context.environment.colorScheme)
+        Self.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, colorScheme: context.environment.colorScheme, tagColorPreferences: tagColorPreferences)
 
         return scrollView
     }
@@ -219,16 +221,17 @@ struct MarkdownTextView: NSViewRepresentable {
         context.coordinator.isFocusModeEnabled = isFocusModeEnabled
         context.coordinator.onWikilinkClick = onWikilinkClick
         context.coordinator.colorScheme = context.environment.colorScheme
-        Self.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, colorScheme: context.environment.colorScheme)
+        Self.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, colorScheme: context.environment.colorScheme, tagColorPreferences: tagColorPreferences)
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, onWikilinkClick: onWikilinkClick)
+        Coordinator(text: $text, theme: theme, tagColorPreferences: tagColorPreferences, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, onWikilinkClick: onWikilinkClick)
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
         var theme: ThemeManager
+        var tagColorPreferences: TagColorPreferences
         var fontPreferences: FontPreferences
         var isFocusModeEnabled: Bool
         var onWikilinkClick: (String) -> Void
@@ -238,9 +241,10 @@ struct MarkdownTextView: NSViewRepresentable {
         /// always calls updateNSView right after makeNSView/makeCoordinator).
         var colorScheme: ColorScheme = .light
 
-        init(text: Binding<String>, theme: ThemeManager, fontPreferences: FontPreferences, isFocusModeEnabled: Bool, onWikilinkClick: @escaping (String) -> Void) {
+        init(text: Binding<String>, theme: ThemeManager, tagColorPreferences: TagColorPreferences, fontPreferences: FontPreferences, isFocusModeEnabled: Bool, onWikilinkClick: @escaping (String) -> Void) {
             self.text = text
             self.theme = theme
+            self.tagColorPreferences = tagColorPreferences
             self.fontPreferences = fontPreferences
             self.isFocusModeEnabled = isFocusModeEnabled
             self.onWikilinkClick = onWikilinkClick
@@ -249,7 +253,7 @@ struct MarkdownTextView: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? DropHandlingTextView else { return }
             text.wrappedValue = textView.string
-            MarkdownTextView.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, colorScheme: colorScheme)
+            MarkdownTextView.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, colorScheme: colorScheme, tagColorPreferences: tagColorPreferences)
             textView.checkForLinkBracketClosure()
         }
 
@@ -259,7 +263,7 @@ struct MarkdownTextView: NSViewRepresentable {
         /// issues noted elsewhere in this file.
         func textViewDidChangeSelection(_ notification: Notification) {
             guard isFocusModeEnabled, let textView = notification.object as? DropHandlingTextView else { return }
-            MarkdownTextView.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, colorScheme: colorScheme)
+            MarkdownTextView.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, colorScheme: colorScheme, tagColorPreferences: tagColorPreferences)
         }
 
         /// Intercepts Return via the modern text-input command path rather
@@ -362,9 +366,9 @@ struct MarkdownTextView: NSViewRepresentable {
     /// font traits to `**`/`__`/`*`/`_` spans — all via attribute-only edits,
     /// never touching the characters themselves, so cursor position and undo
     /// history are untouched.
-    static func applyMarkdownStyling(in textView: NSTextView, theme: ThemeManager, fontPreferences: FontPreferences, isFocusModeEnabled: Bool = false, colorScheme: ColorScheme) {
+    static func applyMarkdownStyling(in textView: NSTextView, theme: ThemeManager, fontPreferences: FontPreferences, isFocusModeEnabled: Bool = false, colorScheme: ColorScheme, tagColorPreferences: TagColorPreferences? = nil) {
         guard let textStorage = textView.textStorage else { return }
-        let resolvedTheme = ResolvedTheme(theme, for: colorScheme)
+        let resolvedTheme = ResolvedTheme(theme, for: colorScheme, tagColorPreferences: tagColorPreferences)
         let fonts = EditorFontSet(fontName: fontPreferences.fontName, fontSize: fontPreferences.fontSize, codeFontName: fontPreferences.codeFontName)
         let fullText = textStorage.string as NSString
         let fullRange = NSRange(location: 0, length: fullText.length)
@@ -660,7 +664,8 @@ struct MarkdownTextView: NSViewRepresentable {
         let nsLine = line as NSString
         for match in tagPattern.matches(in: line, range: NSRange(location: 0, length: nsLine.length)) {
             let globalRange = NSRange(location: lineRange.location + match.range.location, length: match.range.length)
-            textStorage.addAttribute(.foregroundColor, value: NSColor(theme.tagColor), range: globalRange)
+            let tagWord = String(nsLine.substring(with: match.range).dropFirst())
+            textStorage.addAttribute(.foregroundColor, value: NSColor(theme.color(forTag: tagWord)), range: globalRange)
             textStorage.addAttribute(.font, value: fonts.bold, range: globalRange)
         }
     }

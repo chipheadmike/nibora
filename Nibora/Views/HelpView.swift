@@ -10,6 +10,7 @@ import SwiftUI
 /// exactly like a real entry rather than a separately-styled document.
 struct HelpView: View {
     @Environment(ThemeManager.self) private var themeManager
+    @Environment(TagColorPreferences.self) private var tagColorPreferences
     @Environment(FontPreferences.self) private var fontPreferences
     @Environment(\.dismiss) private var dismiss
 
@@ -29,6 +30,7 @@ struct HelpView: View {
             MarkdownPreviewView(
                 markdownText: Self.manualText,
                 theme: themeManager,
+                tagColorPreferences: tagColorPreferences,
                 fontPreferences: fontPreferences,
                 onWikilinkClick: { _ in }
             )
@@ -75,7 +77,7 @@ struct HelpView: View {
     - **Vaults** — switch between every vault folder you've ever opened, or open another one. The current vault shows a checkmark. Also manageable from Settings > General, where each recent vault can be removed from the list (this only forgets it — nothing on disk is touched)
     - **On This Day** — past entries from today's date in previous years
     - **Random Entry** — jumps to a random entry
-    - **Journal Stats** — total entries, total words, writing streaks, and a recent-mood indicator with a trend chart, inferred automatically on-device — nothing is sent anywhere to compute it
+    - **Journal Stats** — total entries, total words, writing streaks, a recent-mood indicator with a trend chart, a chart of what time of day you tend to write, and a word cloud of your most frequent words — all inferred automatically on-device, nothing is sent anywhere to compute it
     - **Entry Graph** — a node graph of entries connected by `[[wikilinks]]`
     - **Ask Nibora** — ask questions about your own journal in plain English. Uses whichever AI provider is selected in Settings > AI: On-Device (Apple Intelligence, free and fully local), or your own Claude or ChatGPT API key (journal excerpts are sent to that provider's servers, billed per-use to your own account)
     - **Journal Digest** — an AI-generated recap of the past 7 or 30 days, surfacing recurring themes and mood shifts. Same provider and privacy rules as Ask Nibora
@@ -95,6 +97,9 @@ struct HelpView: View {
     In the menu bar (the pencil icon, always available even if Nibora's window is closed):
     - **Quick Capture** — jot a note without opening the app; it's appended, timestamped, to today's entry, creating it first if needed. A click-triggered window only — nothing runs in the background listening for keystrokes
 
+    Outside the app entirely:
+    - **Siri / Shortcuts** — say "Capture a journal entry in Nibora" (or build a Shortcuts automation around it) to append a note to today's entry, hands-free. Uses Apple's App Intents framework, the same officially-supported mechanism apps use for Siri and Shortcuts — not a custom background listener
+
     ---
 
     ## Organization
@@ -102,14 +107,15 @@ struct HelpView: View {
     - The sidebar groups entries by month — click a month header to collapse or expand it.
     - Right-click an entry for Choose Icon…, Move Up/Down (when sorted manually), and Delete….
     - Search (top of the sidebar) matches titles and body text, with matches highlighted.
-    - Tag pills appear above the entry list once you've used any #tags — click one to filter.
+    - Tag pills appear above the entry list once you've used any #tags — click one to filter. Right-click a tag for a color picker (applies everywhere that tag appears — sidebar, editor, and preview), Rename or Merge… (renaming to an existing tag folds the two together), and Delete Tag, applied across every entry that uses it.
     - A "Linked From" panel appears below an entry's attachments whenever another entry references it via `[[wikilink]]` — the reverse direction of the link itself.
 
     ---
 
     ## Settings
 
-    - **General** — vault location, window title, sort order (with an ascending/descending option for the date-based modes), an optional entry template (with a `{{weekday}}` placeholder), and a one-click "Export Vault as Zip…" backup of everything.
+    - **General** — vault location (and switching between every vault you've opened), window title, sort order (with an ascending/descending option for the date-based modes), and a one-click "Export Vault as Zip…" backup of everything.
+    - **Entries** — a reminder notification for days you haven't written yet, and optional named entry templates (with a `{{weekday}}` placeholder — with more than one, New Entry becomes a menu to pick from).
     - **Editor** — font/size, the timestamp hotkey, and Read Aloud's voice/rate/pitch (with a live preview button).
     - **Appearance** — a Display picker to override Light/Dark/System for Nibora only (every color below automatically nudges its brightness to stay legible in whichever mode is active), one-click theme presets, a color picker for every styled markdown element, plus the code-block font.
     - **Import** — bring in Markdown files from another app, and scan for orphaned attachment images no entry references anymore.
