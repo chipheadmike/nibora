@@ -62,6 +62,24 @@ struct NiboraApp: App {
                 .preferredColorScheme(appAppearancePreferences.mode.colorScheme)
         }
         .modelContainer(Self.sharedModelContainer)
+        .commands {
+            // A menu bar fallback for switching vaults — the sidebar
+            // toolbar's own Vaults button can vanish under macOS's
+            // customizable-toolbar overflow behavior at narrower window
+            // widths; the menu bar isn't subject to that at all.
+            CommandMenu("Vault") {
+                ForEach(vaultManager.recentVaults.sorted(by: { $0.lastOpenedAt > $1.lastOpenedAt })) { info in
+                    Button(info.displayName) {
+                        vaultManager.switchToVault(info)
+                    }
+                    .disabled(vaultManager.isCurrent(info))
+                }
+                Divider()
+                Button("Open Other Vault…") {
+                    vaultManager.pickVault()
+                }
+            }
+        }
 
         MenuBarExtra("Quick Capture", systemImage: "square.and.pencil") {
             QuickCaptureView()
