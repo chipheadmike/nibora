@@ -16,6 +16,12 @@ struct MarkdownPreviewView: View {
     let fontPreferences: FontPreferences
     let onWikilinkClick: (String) -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var resolvedTheme: ResolvedTheme {
+        ResolvedTheme(theme, for: colorScheme)
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 6) {
@@ -91,16 +97,16 @@ struct MarkdownPreviewView: View {
         case .heading(let level, let content):
             Text(attributedText(content))
                 .font(headingFont(for: level))
-                .foregroundStyle(theme.color(forHeadingLevel: level))
+                .foregroundStyle(resolvedTheme.color(forHeadingLevel: level))
                 .padding(.top, level <= 2 ? 8 : 4)
         case .blockquote(let content):
             HStack(alignment: .top, spacing: 8) {
                 Rectangle()
-                    .fill(theme.blockquoteColor.opacity(0.5))
+                    .fill(resolvedTheme.blockquoteColor.opacity(0.5))
                     .frame(width: 3)
                 Text(attributedText(content))
                     .italic()
-                    .foregroundStyle(theme.blockquoteColor)
+                    .foregroundStyle(resolvedTheme.blockquoteColor)
             }
         case .horizontalRule:
             Divider()
@@ -117,10 +123,10 @@ struct MarkdownPreviewView: View {
         case .task(let checked, let content):
             HStack(alignment: .top, spacing: 6) {
                 Image(systemName: checked ? "checkmark.square.fill" : "square")
-                    .foregroundStyle(checked ? theme.linkColor : theme.boldColor)
+                    .foregroundStyle(checked ? resolvedTheme.linkColor : resolvedTheme.boldColor)
                 Text(attributedText(content))
                     .strikethrough(checked)
-                    .foregroundStyle(checked ? theme.strikethroughColor : theme.bodyColor)
+                    .foregroundStyle(checked ? resolvedTheme.strikethroughColor : resolvedTheme.bodyColor)
             }
         case .paragraph(let content):
             Text(attributedText(content))
@@ -129,7 +135,7 @@ struct MarkdownPreviewView: View {
 
     private func attributedText(_ line: String) -> AttributedString {
         let fonts = EditorFontSet(fontName: fontPreferences.fontName, fontSize: fontPreferences.fontSize, codeFontName: fontPreferences.codeFontName)
-        let nsAttributed = MarkdownTextView.inlineAttributedText(from: line, theme: theme, fonts: fonts)
+        let nsAttributed = MarkdownTextView.inlineAttributedText(from: line, theme: theme, fonts: fonts, colorScheme: colorScheme)
         return AttributedString(nsAttributed)
     }
 

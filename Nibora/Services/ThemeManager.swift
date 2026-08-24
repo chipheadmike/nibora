@@ -101,6 +101,30 @@ final class ThemeManager {
         }
     }
 
+    /// Applies every color from a ThemePresetDefinition at once — just sets
+    /// each of this class's own properties, so the individual pickers and
+    /// their persistence keep working unchanged; a preset is a starting
+    /// point, not a locked-in mode.
+    func apply(_ preset: ThemePresetDefinition) {
+        bodyColor = preset.bodyColor
+        h1Color = preset.h1Color
+        h2Color = preset.h2Color
+        h3Color = preset.h3Color
+        h4Color = preset.h4Color
+        h5Color = preset.h5Color
+        h6Color = preset.h6Color
+        boldColor = preset.boldColor
+        italicColor = preset.italicColor
+        linkColor = preset.linkColor
+        codeColor = preset.codeColor
+        strikethroughColor = preset.strikethroughColor
+        highlightColor = preset.highlightColor
+        blockquoteColor = preset.blockquoteColor
+        horizontalRuleColor = preset.horizontalRuleColor
+        tagColor = preset.tagColor
+        wikilinkColor = preset.wikilinkColor
+    }
+
     func resetToDefaults() {
         bodyColor = Self.defaultBody
         h1Color = Self.defaultH1

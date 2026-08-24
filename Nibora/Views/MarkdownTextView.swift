@@ -99,10 +99,11 @@ struct MarkdownTextView: NSViewRepresentable {
         return String(nsLine.substring(with: match.range).dropFirst())
     }
 
-    static func inlineAttributedText(from line: String, theme: ThemeManager, fonts: EditorFontSet) -> NSAttributedString {
+    static func inlineAttributedText(from line: String, theme: ThemeManager, fonts: EditorFontSet, colorScheme: ColorScheme) -> NSAttributedString {
+        let resolved = ResolvedTheme(theme, for: colorScheme)
         let result = NSMutableAttributedString()
         let nsLine = line as NSString
-        let baseAttributes: [NSAttributedString.Key: Any] = [.font: fonts.regular, .foregroundColor: NSColor(theme.bodyColor)]
+        let baseAttributes: [NSAttributedString.Key: Any] = [.font: fonts.regular, .foregroundColor: NSColor(resolved.bodyColor)]
         var cursor = 0
 
         func appendPlain(_ range: NSRange) {
@@ -123,44 +124,44 @@ struct MarkdownTextView: NSViewRepresentable {
                 let content = nsLine.substring(with: match.range(at: 1))
                 result.append(NSAttributedString(string: content, attributes: [
                     .font: fonts.code,
-                    .foregroundColor: NSColor(theme.codeColor),
+                    .foregroundColor: NSColor(resolved.codeColor),
                     .backgroundColor: NSColor.textBackgroundColor.blended(withFraction: 0.08, of: .labelColor) ?? NSColor.textBackgroundColor
                 ]))
             } else if match.range(at: 2).location != NSNotFound {
                 let text = nsLine.substring(with: match.range(at: 2))
                 let urlString = nsLine.substring(with: match.range(at: 3))
-                var attrs: [NSAttributedString.Key: Any] = [.font: fonts.regular, .foregroundColor: NSColor(theme.linkColor), .underlineStyle: NSUnderlineStyle.single.rawValue]
+                var attrs: [NSAttributedString.Key: Any] = [.font: fonts.regular, .foregroundColor: NSColor(resolved.linkColor), .underlineStyle: NSUnderlineStyle.single.rawValue]
                 if let url = URL(string: urlString) { attrs[.link] = url }
                 result.append(NSAttributedString(string: text, attributes: attrs))
             } else if match.range(at: 4).location != NSNotFound {
                 let titleText = nsLine.substring(with: match.range(at: 4))
-                var attrs: [NSAttributedString.Key: Any] = [.font: fonts.regular, .foregroundColor: NSColor(theme.wikilinkColor), .underlineStyle: NSUnderlineStyle.single.rawValue]
+                var attrs: [NSAttributedString.Key: Any] = [.font: fonts.regular, .foregroundColor: NSColor(resolved.wikilinkColor), .underlineStyle: NSUnderlineStyle.single.rawValue]
                 if let encoded = titleText.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
                    let url = URL(string: "\(wikilinkScheme):///\(encoded)") {
                     attrs[.link] = url
                 }
                 result.append(NSAttributedString(string: titleText, attributes: attrs))
             } else if match.range(at: 5).location != NSNotFound {
-                appendStyled(nsLine.substring(with: match.range(at: 5)), font: fonts.boldItalic, color: theme.boldColor)
+                appendStyled(nsLine.substring(with: match.range(at: 5)), font: fonts.boldItalic, color: resolved.boldColor)
             } else if match.range(at: 6).location != NSNotFound {
-                appendStyled(nsLine.substring(with: match.range(at: 6)), font: fonts.boldItalic, color: theme.boldColor)
+                appendStyled(nsLine.substring(with: match.range(at: 6)), font: fonts.boldItalic, color: resolved.boldColor)
             } else if match.range(at: 7).location != NSNotFound {
-                appendStyled(nsLine.substring(with: match.range(at: 7)), font: fonts.bold, color: theme.boldColor)
+                appendStyled(nsLine.substring(with: match.range(at: 7)), font: fonts.bold, color: resolved.boldColor)
             } else if match.range(at: 8).location != NSNotFound {
-                appendStyled(nsLine.substring(with: match.range(at: 8)), font: fonts.bold, color: theme.boldColor)
+                appendStyled(nsLine.substring(with: match.range(at: 8)), font: fonts.bold, color: resolved.boldColor)
             } else if match.range(at: 9).location != NSNotFound {
-                appendStyled(nsLine.substring(with: match.range(at: 9)), font: fonts.italic, color: theme.italicColor)
+                appendStyled(nsLine.substring(with: match.range(at: 9)), font: fonts.italic, color: resolved.italicColor)
             } else if match.range(at: 10).location != NSNotFound {
-                appendStyled(nsLine.substring(with: match.range(at: 10)), font: fonts.italic, color: theme.italicColor)
+                appendStyled(nsLine.substring(with: match.range(at: 10)), font: fonts.italic, color: resolved.italicColor)
             } else if match.range(at: 11).location != NSNotFound {
                 let content = nsLine.substring(with: match.range(at: 11))
-                result.append(NSAttributedString(string: content, attributes: [.font: fonts.regular, .foregroundColor: NSColor(theme.strikethroughColor), .strikethroughStyle: NSUnderlineStyle.single.rawValue]))
+                result.append(NSAttributedString(string: content, attributes: [.font: fonts.regular, .foregroundColor: NSColor(resolved.strikethroughColor), .strikethroughStyle: NSUnderlineStyle.single.rawValue]))
             } else if match.range(at: 12).location != NSNotFound {
                 let content = nsLine.substring(with: match.range(at: 12))
-                result.append(NSAttributedString(string: content, attributes: [.font: fonts.regular, .foregroundColor: NSColor(theme.bodyColor), .backgroundColor: NSColor(theme.highlightColor)]))
+                result.append(NSAttributedString(string: content, attributes: [.font: fonts.regular, .foregroundColor: NSColor(resolved.bodyColor), .backgroundColor: NSColor(resolved.highlightColor)]))
             } else {
                 let content = nsLine.substring(with: match.range)
-                result.append(NSAttributedString(string: content, attributes: [.font: fonts.bold, .foregroundColor: NSColor(theme.tagColor)]))
+                result.append(NSAttributedString(string: content, attributes: [.font: fonts.bold, .foregroundColor: NSColor(resolved.tagColor)]))
             }
 
             cursor = match.range.location + match.range.length
@@ -203,7 +204,7 @@ struct MarkdownTextView: NSViewRepresentable {
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = false
 
-        Self.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled)
+        Self.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, colorScheme: context.environment.colorScheme)
 
         return scrollView
     }
@@ -217,7 +218,8 @@ struct MarkdownTextView: NSViewRepresentable {
         }
         context.coordinator.isFocusModeEnabled = isFocusModeEnabled
         context.coordinator.onWikilinkClick = onWikilinkClick
-        Self.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled)
+        context.coordinator.colorScheme = context.environment.colorScheme
+        Self.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, colorScheme: context.environment.colorScheme)
     }
 
     func makeCoordinator() -> Coordinator {
@@ -230,6 +232,11 @@ struct MarkdownTextView: NSViewRepresentable {
         var fontPreferences: FontPreferences
         var isFocusModeEnabled: Bool
         var onWikilinkClick: (String) -> Void
+        /// Set from context.environment in updateNSView — makeCoordinator()
+        /// has no environment access, so this starts at a reasonable
+        /// default and is corrected before the first real render (SwiftUI
+        /// always calls updateNSView right after makeNSView/makeCoordinator).
+        var colorScheme: ColorScheme = .light
 
         init(text: Binding<String>, theme: ThemeManager, fontPreferences: FontPreferences, isFocusModeEnabled: Bool, onWikilinkClick: @escaping (String) -> Void) {
             self.text = text
@@ -242,7 +249,7 @@ struct MarkdownTextView: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? DropHandlingTextView else { return }
             text.wrappedValue = textView.string
-            MarkdownTextView.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled)
+            MarkdownTextView.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, colorScheme: colorScheme)
             textView.checkForLinkBracketClosure()
         }
 
@@ -252,7 +259,7 @@ struct MarkdownTextView: NSViewRepresentable {
         /// issues noted elsewhere in this file.
         func textViewDidChangeSelection(_ notification: Notification) {
             guard isFocusModeEnabled, let textView = notification.object as? DropHandlingTextView else { return }
-            MarkdownTextView.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled)
+            MarkdownTextView.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, colorScheme: colorScheme)
         }
 
         /// Intercepts Return via the modern text-input command path rather
@@ -355,37 +362,38 @@ struct MarkdownTextView: NSViewRepresentable {
     /// font traits to `**`/`__`/`*`/`_` spans — all via attribute-only edits,
     /// never touching the characters themselves, so cursor position and undo
     /// history are untouched.
-    static func applyMarkdownStyling(in textView: NSTextView, theme: ThemeManager, fontPreferences: FontPreferences, isFocusModeEnabled: Bool = false) {
+    static func applyMarkdownStyling(in textView: NSTextView, theme: ThemeManager, fontPreferences: FontPreferences, isFocusModeEnabled: Bool = false, colorScheme: ColorScheme) {
         guard let textStorage = textView.textStorage else { return }
+        let resolvedTheme = ResolvedTheme(theme, for: colorScheme)
         let fonts = EditorFontSet(fontName: fontPreferences.fontName, fontSize: fontPreferences.fontSize, codeFontName: fontPreferences.codeFontName)
         let fullText = textStorage.string as NSString
         let fullRange = NSRange(location: 0, length: fullText.length)
         guard fullRange.length > 0 else { return }
 
         textStorage.beginEditing()
-        textStorage.addAttribute(.foregroundColor, value: NSColor(theme.bodyColor), range: fullRange)
+        textStorage.addAttribute(.foregroundColor, value: NSColor(resolvedTheme.bodyColor), range: fullRange)
         textStorage.addAttribute(.font, value: fonts.regular, range: fullRange)
 
         fullText.enumerateSubstrings(in: fullRange, options: [.byLines]) { _, lineRange, _, _ in
             let line = fullText.substring(with: lineRange)
             if let level = headingLevel(of: line) {
-                textStorage.addAttribute(.foregroundColor, value: NSColor(theme.color(forHeadingLevel: level)), range: lineRange)
+                textStorage.addAttribute(.foregroundColor, value: NSColor(resolvedTheme.color(forHeadingLevel: level)), range: lineRange)
             }
             applyBulletIndent(in: textStorage, line: line, lineRange: lineRange, fonts: fonts)
             applyNumberedListIndent(in: textStorage, line: line, lineRange: lineRange, fonts: fonts)
-            applyTaskListCheckbox(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
-            applyBlockquote(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
-            applyHorizontalRule(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
-            applyTag(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
-            applyEmphasis(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
-            applyLinks(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
-            applyWikilink(in: textStorage, line: line, lineRange: lineRange, theme: theme)
+            applyTaskListCheckbox(in: textStorage, line: line, lineRange: lineRange, theme: resolvedTheme, fonts: fonts)
+            applyBlockquote(in: textStorage, line: line, lineRange: lineRange, theme: resolvedTheme, fonts: fonts)
+            applyHorizontalRule(in: textStorage, line: line, lineRange: lineRange, theme: resolvedTheme, fonts: fonts)
+            applyTag(in: textStorage, line: line, lineRange: lineRange, theme: resolvedTheme, fonts: fonts)
+            applyEmphasis(in: textStorage, line: line, lineRange: lineRange, theme: resolvedTheme, fonts: fonts)
+            applyLinks(in: textStorage, line: line, lineRange: lineRange, theme: resolvedTheme, fonts: fonts)
+            applyWikilink(in: textStorage, line: line, lineRange: lineRange, theme: resolvedTheme)
             // Applied last so code spans win over any overlapping bold/italic/
             // link styling within backticks, matching standard markdown
             // semantics (code content isn't further interpreted as markup).
-            applyInlineCode(in: textStorage, line: line, lineRange: lineRange, theme: theme, fonts: fonts)
-            applyStrikethrough(in: textStorage, line: line, lineRange: lineRange, theme: theme)
-            applyHighlight(in: textStorage, line: line, lineRange: lineRange, theme: theme)
+            applyInlineCode(in: textStorage, line: line, lineRange: lineRange, theme: resolvedTheme, fonts: fonts)
+            applyStrikethrough(in: textStorage, line: line, lineRange: lineRange, theme: resolvedTheme)
+            applyHighlight(in: textStorage, line: line, lineRange: lineRange, theme: resolvedTheme)
         }
 
         // Applied after all other styling so it uniformly mutes everything
@@ -393,7 +401,7 @@ struct MarkdownTextView: NSViewRepresentable {
         // (heading, link, code, etc.) — a flat dim rather than per-element.
         if isFocusModeEnabled {
             let focusedRange = focusedParagraphRange(in: textView)
-            let dimColor = NSColor(theme.bodyColor).withAlphaComponent(0.25)
+            let dimColor = NSColor(resolvedTheme.bodyColor).withAlphaComponent(0.25)
             if focusedRange.location > fullRange.location {
                 textStorage.addAttribute(.foregroundColor, value: dimColor, range: NSRange(location: fullRange.location, length: focusedRange.location - fullRange.location))
             }
@@ -438,7 +446,7 @@ struct MarkdownTextView: NSViewRepresentable {
 
     /// Colors, monospaces (via the user's chosen code font), and gives a
     /// subtle background pill to `` `code` `` spans.
-    private static func applyInlineCode(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager, fonts: EditorFontSet) {
+    private static func applyInlineCode(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ResolvedTheme, fonts: EditorFontSet) {
         let nsLine = line as NSString
         for match in inlineCodePattern.matches(in: line, range: NSRange(location: 0, length: nsLine.length)) {
             let globalRange = NSRange(location: lineRange.location + match.range.location, length: match.range.length)
@@ -451,7 +459,7 @@ struct MarkdownTextView: NSViewRepresentable {
     /// Strikes through and mutes `~~text~~` spans (marker included, matching
     /// how bold/italic/code color their whole match rather than just the
     /// inner text).
-    private static func applyStrikethrough(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager) {
+    private static func applyStrikethrough(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ResolvedTheme) {
         let nsLine = line as NSString
         for match in strikethroughPattern.matches(in: line, range: NSRange(location: 0, length: nsLine.length)) {
             let globalRange = NSRange(location: lineRange.location + match.range.location, length: match.range.length)
@@ -462,7 +470,7 @@ struct MarkdownTextView: NSViewRepresentable {
 
     /// Gives `==text==` spans a highlighter-style background (marker
     /// included).
-    private static func applyHighlight(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager) {
+    private static func applyHighlight(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ResolvedTheme) {
         let nsLine = line as NSString
         for match in highlightPattern.matches(in: line, range: NSRange(location: 0, length: nsLine.length)) {
             let globalRange = NSRange(location: lineRange.location + match.range.location, length: match.range.length)
@@ -478,7 +486,7 @@ struct MarkdownTextView: NSViewRepresentable {
     /// visible text (never hidden — that needs riskier TextKit tricks we're
     /// avoiding after the image-attachment experience) but is shrunk and
     /// muted so it reads as metadata rather than competing with the link.
-    private static func applyLinks(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager, fonts: EditorFontSet) {
+    private static func applyLinks(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ResolvedTheme, fonts: EditorFontSet) {
         let nsLine = line as NSString
         for match in linkPattern.matches(in: line, range: NSRange(location: 0, length: nsLine.length)) {
             let textRange = match.range(at: 1)
@@ -509,7 +517,7 @@ struct MarkdownTextView: NSViewRepresentable {
     /// an entry (that lookup happens one layer up, in ContentView, where
     /// the full entry list already lives) — an unresolved link just no-ops
     /// when clicked rather than looking visually different.
-    private static func applyWikilink(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager) {
+    private static func applyWikilink(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ResolvedTheme) {
         let nsLine = line as NSString
         for match in wikilinkPattern.matches(in: line, range: NSRange(location: 0, length: nsLine.length)) {
             let globalRange = NSRange(location: lineRange.location + match.range.location, length: match.range.length)
@@ -555,7 +563,7 @@ struct MarkdownTextView: NSViewRepresentable {
     /// has failed every other time it's been tried in this file. Checked
     /// items also get their content struck through, same visual language as
     /// `~~text~~`.
-    private static func applyTaskListCheckbox(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager, fonts: EditorFontSet) {
+    private static func applyTaskListCheckbox(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ResolvedTheme, fonts: EditorFontSet) {
         let nsLine = line as NSString
         guard let match = taskListPattern.firstMatch(in: line, range: NSRange(location: 0, length: nsLine.length)) else {
             return
@@ -611,7 +619,7 @@ struct MarkdownTextView: NSViewRepresentable {
     /// overriding draw), which has proven unreliable for anything
     /// click/paint-related in this beta, so this stays attribute-only like
     /// everything else here.
-    private static func applyBlockquote(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager, fonts: EditorFontSet) {
+    private static func applyBlockquote(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ResolvedTheme, fonts: EditorFontSet) {
         guard blockquotePattern.firstMatch(in: line, range: NSRange(location: 0, length: (line as NSString).length)) != nil else {
             return
         }
@@ -634,7 +642,7 @@ struct MarkdownTextView: NSViewRepresentable {
     /// (invisible) glyphs underneath, so it reads as a solid rule. Font size
     /// is left untouched (an earlier version shrank it, which collapsed the
     /// line's height along with it and made the whole thing nearly invisible).
-    private static func applyHorizontalRule(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager, fonts: EditorFontSet) {
+    private static func applyHorizontalRule(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ResolvedTheme, fonts: EditorFontSet) {
         guard horizontalRulePattern.firstMatch(in: line, range: NSRange(location: 0, length: (line as NSString).length)) != nil else {
             return
         }
@@ -648,7 +656,7 @@ struct MarkdownTextView: NSViewRepresentable {
     /// (word char required right after "#") already keeps this from ever
     /// matching a heading marker, so no extra exclusion logic is needed
     /// here.
-    private static func applyTag(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager, fonts: EditorFontSet) {
+    private static func applyTag(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ResolvedTheme, fonts: EditorFontSet) {
         let nsLine = line as NSString
         for match in tagPattern.matches(in: line, range: NSRange(location: 0, length: nsLine.length)) {
             let globalRange = NSRange(location: lineRange.location + match.range.location, length: match.range.length)
@@ -676,7 +684,7 @@ struct MarkdownTextView: NSViewRepresentable {
         textStorage.addAttribute(.font, value: fonts.bold, range: markerRange)
     }
 
-    private static func applyEmphasis(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ThemeManager, fonts: EditorFontSet) {
+    private static func applyEmphasis(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ResolvedTheme, fonts: EditorFontSet) {
         let nsLine = line as NSString
         let lineSearchRange = NSRange(location: 0, length: nsLine.length)
         var claimedRanges: [NSRange] = []

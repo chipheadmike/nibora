@@ -47,8 +47,25 @@ private struct GeneralSettingsTab: View {
                     Text(vaultManager.displayPath ?? "None")
                         .foregroundStyle(.secondary)
                 }
-                Button("Change Vault…") {
-                    vaultManager.changeVault()
+                Button("Open Other Vault…") {
+                    vaultManager.pickVault()
+                }
+
+                ForEach(vaultManager.recentVaults.sorted(by: { $0.lastOpenedAt > $1.lastOpenedAt })) { info in
+                    HStack {
+                        Label(info.displayName, systemImage: vaultManager.isCurrent(info) ? "checkmark.circle.fill" : "externaldrive")
+                            .foregroundStyle(vaultManager.isCurrent(info) ? Color.accentColor : .primary)
+                        Spacer()
+                        if !vaultManager.isCurrent(info) {
+                            Button("Switch") {
+                                vaultManager.switchToVault(info)
+                            }
+                            Button("Remove") {
+                                vaultManager.removeVault(info)
+                            }
+                            .foregroundStyle(.red)
+                        }
+                    }
                 }
             }
 
@@ -222,12 +239,55 @@ private struct EditorSettingsTab: View {
 private struct AppearanceSettingsTab: View {
     @Environment(ThemeManager.self) private var themeManager
     @Environment(FontPreferences.self) private var fontPreferences
+    @Environment(AppAppearancePreferences.self) private var appAppearancePreferences
 
     var body: some View {
         @Bindable var themeManager = themeManager
         @Bindable var fontPreferences = fontPreferences
+        @Bindable var appAppearancePreferences = appAppearancePreferences
 
         Form {
+            Section("Display") {
+                Picker("Appearance", selection: $appAppearancePreferences.mode) {
+                    ForEach(AppAppearanceMode.allCases) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                Text("Overrides the system setting for Nibora only. Every color below automatically adjusts brightness as needed to stay legible against whichever mode is active — Light and Dark aren't separate palettes, just a readability nudge on top of the ones you've chosen.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Theme Presets") {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(ThemePresets.all) { preset in
+                            Button {
+                                themeManager.apply(preset)
+                            } label: {
+                                VStack(spacing: 4) {
+                                    HStack(spacing: 2) {
+                                        ForEach(Array(preset.previewSwatches.enumerated()), id: \.offset) { _, swatch in
+                                            Circle().fill(swatch).frame(width: 12, height: 12)
+                                        }
+                                    }
+                                    Text(preset.name)
+                                        .font(.caption2)
+                                        .foregroundStyle(.primary)
+                                }
+                                .padding(8)
+                                .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.1)))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                Text("Applies every color below at once — a starting point you can still fine-tune with the individual pickers.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Text Colors") {
                 ColorPicker("Body Text", selection: $themeManager.bodyColor)
                 ColorPicker("# Heading 1", selection: $themeManager.h1Color)
@@ -604,5 +664,6 @@ private struct RecoveryCodeRevealView: View {
         .environment(PasswordLockPreferences())
         .environment(AppLockManager(preferences: PasswordLockPreferences()))
         .environment(AIProviderPreferences())
+        .environment(AppAppearancePreferences())
         .modelContainer(for: JournalEntryRecord.self, inMemory: true)
 }

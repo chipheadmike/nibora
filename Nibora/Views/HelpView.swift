@@ -72,11 +72,13 @@ struct HelpView: View {
     In the sidebar:
     - **New Entry** — creates today's entry (hidden once today's entry exists)
     - **Rescan Vault** — fully re-parses every file, useful after editing files outside the app, or after enabling a feature that needs to backfill older entries
+    - **Vaults** — switch between every vault folder you've ever opened, or open another one. The current vault shows a checkmark. Also manageable from Settings > General, where each recent vault can be removed from the list (this only forgets it — nothing on disk is touched)
     - **On This Day** — past entries from today's date in previous years
     - **Random Entry** — jumps to a random entry
     - **Journal Stats** — total entries, total words, writing streaks, and a recent-mood indicator with a trend chart, inferred automatically on-device — nothing is sent anywhere to compute it
     - **Entry Graph** — a node graph of entries connected by `[[wikilinks]]`
     - **Ask Nibora** — ask questions about your own journal in plain English. Uses whichever AI provider is selected in Settings > AI: On-Device (Apple Intelligence, free and fully local), or your own Claude or ChatGPT API key (journal excerpts are sent to that provider's servers, billed per-use to your own account)
+    - **Journal Digest** — an AI-generated recap of the past 7 or 30 days, surfacing recurring themes and mood shifts. Same provider and privacy rules as Ask Nibora
     - **Writing Calendar** — a GitHub-style heatmap of writing activity over the past year; click a day to jump to that entry
     - **Attachments** — every image across the whole vault in one browsable grid, not just the current entry's
 
@@ -89,6 +91,9 @@ struct HelpView: View {
 
     Anywhere:
     - **⌘K** — quick switcher, jump to any entry by title or date
+
+    In the menu bar (the pencil icon, always available even if Nibora's window is closed):
+    - **Quick Capture** — jot a note without opening the app; it's appended, timestamped, to today's entry, creating it first if needed. A click-triggered window only — nothing runs in the background listening for keystrokes
 
     ---
 
@@ -106,7 +111,7 @@ struct HelpView: View {
 
     - **General** — vault location, window title, sort order (with an ascending/descending option for the date-based modes), an optional entry template (with a `{{weekday}}` placeholder), and a one-click "Export Vault as Zip…" backup of everything.
     - **Editor** — font/size, the timestamp hotkey, and Read Aloud's voice/rate/pitch (with a live preview button).
-    - **Appearance** — a color picker for every styled markdown element, plus the code-block font.
+    - **Appearance** — a Display picker to override Light/Dark/System for Nibora only (every color below automatically nudges its brightness to stay legible in whichever mode is active), one-click theme presets, a color picker for every styled markdown element, plus the code-block font.
     - **Import** — bring in Markdown files from another app, and scan for orphaned attachment images no entry references anymore.
     - **Password** — optional privacy-screen lock with a lock timer, a one-time recovery code, and an optional recovery email — if forgotten, the lock screen can open a pre-filled Mail.app draft with a temporary code, which you send to yourself and enter back in. This is a privacy screen, not encryption — entries stay plain text on disk either way.
     - **AI** — choose Ask Nibora's provider (On-Device, Claude, or ChatGPT) and enter your own API key for the cloud options. Keys are stored in this Mac's Keychain, never in plain text.
