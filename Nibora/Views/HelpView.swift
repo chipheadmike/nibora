@@ -85,7 +85,7 @@ struct HelpView: View {
     In the sidebar:
     - **New Entry** — Journal: creates today's entry (hidden once today's entry exists). Freeform: asks for a title and creates it at the vault's root — for a specific folder instead, right-click that folder and use its own New Entry
     - **Rescan Vault** — fully re-parses every file, useful after editing files outside the app, or after enabling a feature that needs to backfill older entries
-    - **Vaults** — switch between every vault folder you've ever opened, or open another one. The current vault shows a checkmark. Also manageable from Settings > General, where each recent vault can be removed from the list (this only forgets it — nothing on disk is touched)
+    - **Vaults** — switch between every vault folder you've ever opened, or open another one. The current vault shows a checkmark. The same list is also always available from the **Vault** menu in the menu bar at the top of the screen, which — unlike this toolbar button — never gets pushed into overflow by a narrow window. Vaults are also manageable from Settings > General, where each recent one can be removed from the list (this only forgets it — nothing on disk is touched)
     - **On This Day** (Journal only) — past entries from today's date in previous years
     - **Random Entry** — jumps to a random entry
     - **Journal Stats** — total entries, total words, a recent-mood indicator with a trend chart, a chart of what time of day you tend to write, and a word cloud of your most frequent words — all inferred automatically on-device, nothing is sent anywhere to compute it. Writing streaks too, in a Journal vault
