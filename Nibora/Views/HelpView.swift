@@ -123,7 +123,7 @@ struct HelpView: View {
     - The sidebar groups entries by month — click a month header to collapse or expand it.
     - Right-click an entry for Choose Icon…, Move Up/Down (when sorted manually), and Delete….
     - Search (top of the sidebar) matches titles and body text, with matches highlighted.
-    - Tag pills appear above the entry list once you've used any #tags — click one to filter. Right-click a tag for a color picker (applies everywhere that tag appears — sidebar, editor, and preview), Rename or Merge… (renaming to an existing tag folds the two together), and Delete Tag, applied across every entry that uses it.
+    - Tag pills appear above the entry list once you've used any #tags — click one to filter. They wrap to additional lines rather than scrolling, so they all stay visible. Right-click a tag for a color picker (applies everywhere that tag appears — sidebar, editor, and preview), Rename or Merge… (renaming to an existing tag folds the two together), and Delete Tag, applied across every entry that uses it.
     - A "Linked From" panel appears below an entry's attachments whenever another entry references it via `[[wikilink]]` — the reverse direction of the link itself.
 
     ---

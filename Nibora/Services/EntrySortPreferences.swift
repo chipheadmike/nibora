@@ -7,6 +7,7 @@ import Foundation
 
 enum EntrySortMode: String, CaseIterable, Identifiable {
     case manual
+    case entryDate
     case createdDate
     case modifiedDate
 
@@ -15,6 +16,7 @@ enum EntrySortMode: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .manual: return "Manual"
+        case .entryDate: return "Entry Date"
         case .createdDate: return "Creation Date"
         case .modifiedDate: return "Modified Date"
         }
@@ -67,7 +69,7 @@ final class EntrySortPreferences {
         if let raw = UserDefaults.standard.string(forKey: Keys.mode), let loaded = EntrySortMode(rawValue: raw) {
             mode = loaded
         } else {
-            mode = .manual
+            mode = .entryDate
         }
         if let raw = UserDefaults.standard.string(forKey: Keys.direction), let loaded = EntrySortDirection(rawValue: raw) {
             direction = loaded
