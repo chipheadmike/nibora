@@ -47,6 +47,8 @@ struct SidebarView: View {
         switch sortMode {
         case .manual:
             secondarySort = SortDescriptor(\JournalEntryRecord.sortOrder)
+        case .entryDate:
+            secondarySort = SortDescriptor(\JournalEntryRecord.date, order: sortDirection.sortOrder)
         case .createdDate:
             secondarySort = SortDescriptor(\JournalEntryRecord.createdAt, order: sortDirection.sortOrder)
         case .modifiedDate:
@@ -119,53 +121,54 @@ struct SidebarView: View {
         .frame(width: 240)
     }
 
+    /// Wraps to additional lines instead of a horizontal scroll — with a
+    /// single-line ScrollView, tags past the sidebar's width were simply
+    /// cut off with no visible indication there was more to scroll to.
     @ViewBuilder
     private var tagFilterRow: some View {
         if !allTags.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(allTags, id: \.self) { tag in
-                        Button {
-                            selectedTag = (selectedTag == tag) ? nil : tag
-                        } label: {
-                            Text("#\(tag)")
-                                .font(.caption)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule().fill(pillBackground(for: tag))
-                                )
-                                .foregroundStyle(pillForeground(for: tag))
+            FlowLayout(spacing: 6) {
+                ForEach(allTags, id: \.self) { tag in
+                    Button {
+                        selectedTag = (selectedTag == tag) ? nil : tag
+                    } label: {
+                        Text("#\(tag)")
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule().fill(pillBackground(for: tag))
+                            )
+                            .foregroundStyle(pillForeground(for: tag))
+                    }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: Binding(
+                        get: { tagColorPickerTag == tag },
+                        set: { isPresented in if !isPresented { tagColorPickerTag = nil } }
+                    )) {
+                        tagColorPicker(for: tag)
+                    }
+                    .contextMenu {
+                        Button("Set Color…") {
+                            tagColorPickerTag = tag
                         }
-                        .buttonStyle(.plain)
-                        .popover(isPresented: Binding(
-                            get: { tagColorPickerTag == tag },
-                            set: { isPresented in if !isPresented { tagColorPickerTag = nil } }
-                        )) {
-                            tagColorPicker(for: tag)
+                        if tagColorPreferences.color(for: tag) != nil {
+                            Button("Reset Color") {
+                                tagColorPreferences.setColor(nil, for: tag)
+                            }
                         }
-                        .contextMenu {
-                            Button("Set Color…") {
-                                tagColorPickerTag = tag
-                            }
-                            if tagColorPreferences.color(for: tag) != nil {
-                                Button("Reset Color") {
-                                    tagColorPreferences.setColor(nil, for: tag)
-                                }
-                            }
-                            Divider()
-                            Button("Rename or Merge…") {
-                                renameText = tag
-                                tagPendingRename = tag
-                            }
-                            Button("Delete Tag", role: .destructive) {
-                                tagPendingDeletion = tag
-                            }
+                        Divider()
+                        Button("Rename or Merge…") {
+                            renameText = tag
+                            tagPendingRename = tag
+                        }
+                        Button("Delete Tag", role: .destructive) {
+                            tagPendingDeletion = tag
                         }
                     }
                 }
-                .padding(.horizontal, 16)
             }
+            .padding(.horizontal, 16)
             .padding(.bottom, 6)
         }
     }
