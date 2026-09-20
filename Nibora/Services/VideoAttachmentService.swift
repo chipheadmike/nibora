@@ -24,7 +24,15 @@ enum VideoAttachmentService {
         try FileManager.default.createDirectory(at: attachmentsFolder, withIntermediateDirectories: true)
 
         let ext = sourceURL.pathExtension.isEmpty ? "mov" : sourceURL.pathExtension.lowercased()
-        let filename = "\(timestampFormatter.string(from: Date()))-\(sanitize(originalName)).\(ext)"
+        let stem = "\(timestampFormatter.string(from: Date()))-\(sanitize(originalName))"
+        // Same file dropped twice in one second would otherwise collide
+        // (copyItem refuses to overwrite) and silently insert nothing.
+        var filename = "\(stem).\(ext)"
+        var suffix = 2
+        while FileManager.default.fileExists(atPath: attachmentsFolder.appendingPathComponent(filename).path) {
+            filename = "\(stem)-\(suffix).\(ext)"
+            suffix += 1
+        }
         let fileURL = attachmentsFolder.appendingPathComponent(filename)
         try FileManager.default.copyItem(at: sourceURL, to: fileURL)
 
