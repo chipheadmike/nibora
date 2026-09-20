@@ -97,7 +97,7 @@ final class EntryTemplatePreferences {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE"
         formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = TimeZone.autoupdatingCurrent
         return formatter
     }()
 }

@@ -6,9 +6,10 @@
 import SwiftUI
 import AppKit
 
-/// Every image across the whole vault, chronologically, browsable outside
-/// the context of any single entry — distinct from AttachmentsStripView,
-/// which only shows one entry's images inline below its editor.
+/// Every image and video across the whole vault, chronologically, browsable
+/// outside the context of any single entry — distinct from
+/// AttachmentsStripView, which only shows one entry's attachments inline
+/// below its editor.
 struct AttachmentsGalleryView: View {
     let vaultURL: URL
     let entries: [JournalEntryRecord]
@@ -17,6 +18,7 @@ struct AttachmentsGalleryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var attachments: [GalleryAttachment] = []
     @State private var previewAttachment: GalleryAttachment?
+    @State private var videoPosterFrames: [URL: NSImage] = [:]
 
     private let columns = [GridItem(.adaptive(minimum: 110), spacing: 8)]
 
@@ -37,7 +39,7 @@ struct AttachmentsGalleryView: View {
                 ContentUnavailableView(
                     "No Attachments",
                     systemImage: "photo.on.rectangle.angled",
-                    description: Text("Images you drag or paste into entries will show up here.")
+                    description: Text("Photos and videos you drag or paste into entries will show up here.")
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -62,33 +64,77 @@ struct AttachmentsGalleryView: View {
 
     @ViewBuilder
     private func thumbnail(for attachment: GalleryAttachment) -> some View {
-        if let image = NSImage(contentsOf: attachment.url) {
+        switch attachment.kind {
+        case .image:
+            if let image = NSImage(contentsOf: attachment.url) {
+                Button {
+                    previewAttachment = attachment
+                } label: {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 110, height: 110)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+            } else {
+                placeholderTile(systemImage: "photo")
+            }
+        case .video:
             Button {
                 previewAttachment = attachment
             } label: {
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 110, height: 110)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                ZStack {
+                    if let poster = videoPosterFrames[attachment.url] {
+                        Image(nsImage: poster)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 110, height: 110)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                    } else {
+                        placeholderTile(systemImage: "video")
+                    }
+                    Image(systemName: "play.circle.fill")
+                        .font(.system(size: 26))
+                        .foregroundStyle(.white, .black.opacity(0.45))
+                }
             }
             .buttonStyle(.plain)
-        } else {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.secondary.opacity(0.15))
-                .frame(width: 110, height: 110)
-                .overlay(Image(systemName: "photo").foregroundStyle(.secondary))
+            .task(id: attachment.url) {
+                guard videoPosterFrames[attachment.url] == nil else { return }
+                videoPosterFrames[attachment.url] = await VideoThumbnailService.posterFrame(for: attachment.url)
+            }
         }
+    }
+
+    private func placeholderTile(systemImage: String) -> some View {
+        RoundedRectangle(cornerRadius: 6)
+            .fill(Color.secondary.opacity(0.15))
+            .frame(width: 110, height: 110)
+            .overlay(Image(systemName: systemImage).foregroundStyle(.secondary))
     }
 
     private func previewContent(for attachment: GalleryAttachment) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let image = NSImage(contentsOf: attachment.url) {
-                let maxDimension: CGFloat = 400
-                let scale = min(1, maxDimension / max(image.size.width, image.size.height, 1))
-                Image(nsImage: image)
-                    .resizable()
-                    .frame(width: image.size.width * scale, height: image.size.height * scale)
+            switch attachment.kind {
+            case .image:
+                if let image = NSImage(contentsOf: attachment.url) {
+                    let maxDimension: CGFloat = 400
+                    let scale = min(1, maxDimension / max(image.size.width, image.size.height, 1))
+                    Image(nsImage: image)
+                        .resizable()
+                        .frame(width: image.size.width * scale, height: image.size.height * scale)
+                }
+            case .video:
+                if let poster = videoPosterFrames[attachment.url] {
+                    Image(nsImage: poster)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: 300, maxHeight: 300)
+                }
+                Button("Play") {
+                    NSWorkspace.shared.open(attachment.url)
+                }
             }
 
             Text(attachment.folderRelativePath.isEmpty ? "Vault Root" : attachment.folderRelativePath)

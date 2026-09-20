@@ -22,6 +22,9 @@ struct NiboraApp: App {
     @State private var aiProviderPreferences = AIProviderPreferences()
     @State private var appAppearancePreferences = AppAppearancePreferences()
     @State private var streakReminderPreferences = StreakReminderPreferences()
+    @State private var weatherPreferences = WeatherPreferences()
+    @State private var weatherService = WeatherService()
+    @State private var imageAttachmentPreferences = ImageAttachmentPreferences()
     @State private var passwordLockPreferences: PasswordLockPreferences
     @State private var appLockManager: AppLockManager
 
@@ -57,6 +60,9 @@ struct NiboraApp: App {
                 .environment(aiProviderPreferences)
                 .environment(appAppearancePreferences)
                 .environment(streakReminderPreferences)
+                .environment(weatherPreferences)
+                .environment(weatherService)
+                .environment(imageAttachmentPreferences)
                 .environment(passwordLockPreferences)
                 .environment(appLockManager)
                 .preferredColorScheme(appAppearancePreferences.mode.colorScheme)
@@ -103,6 +109,9 @@ struct NiboraApp: App {
                 .environment(aiProviderPreferences)
                 .environment(appAppearancePreferences)
                 .environment(streakReminderPreferences)
+                .environment(weatherPreferences)
+                .environment(weatherService)
+                .environment(imageAttachmentPreferences)
                 .environment(passwordLockPreferences)
                 .environment(appLockManager)
                 .preferredColorScheme(appAppearancePreferences.mode.colorScheme)

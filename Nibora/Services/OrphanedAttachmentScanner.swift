@@ -6,9 +6,10 @@
 import Foundation
 
 /// Finds files under any Attachments/ folder, anywhere in the vault, that
-/// aren't referenced by any entry's `![](...)` image markdown in that same
-/// folder — leftovers from deleted entries (in-editor image removal is now
-/// handled immediately at save time by ImageAttachmentService.pruneRemovedImages,
+/// aren't referenced by any entry's `![](...)` image markdown or
+/// video-link markdown in that same folder — leftovers from deleted entries
+/// (in-editor removal is now handled immediately at save time by
+/// ImageAttachmentService.pruneRemovedImages / VideoAttachmentService.pruneRemovedVideos,
 /// so this mainly catches whole-entry deletions and anything edited outside
 /// the app). Reads bodies fresh from disk rather than the cached
 /// searchableBody, since this feeds a delete action and needs to reflect
@@ -33,10 +34,17 @@ enum OrphanedAttachmentScanner {
             guard let contents = try? String(contentsOf: fileURL, encoding: .utf8) else { continue }
             let body = MarkdownFrontmatterParser.parse(contents).body
             let nsBody = body as NSString
-            let matches = MarkdownTextView.imageReferencePattern.matches(in: body, range: NSRange(location: 0, length: nsBody.length))
             let folderRelativePath = (entry.relativePath as NSString).deletingLastPathComponent
-            for match in matches {
+
+            let imageMatches = MarkdownTextView.imageReferencePattern.matches(in: body, range: NSRange(location: 0, length: nsBody.length))
+            for match in imageMatches {
                 let relativeRef = nsBody.substring(with: match.range(at: 1))
+                referencedFileNamesByFolder[folderRelativePath, default: []].insert((relativeRef as NSString).lastPathComponent)
+            }
+
+            let videoMatches = MarkdownTextView.videoReferencePattern.matches(in: body, range: NSRange(location: 0, length: nsBody.length))
+            for match in videoMatches {
+                let relativeRef = nsBody.substring(with: match.range(at: 2))
                 referencedFileNamesByFolder[folderRelativePath, default: []].insert((relativeRef as NSString).lastPathComponent)
             }
         }
