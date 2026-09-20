@@ -49,7 +49,7 @@ enum QuickCaptureService {
         let formatter = DateFormatter()
         formatter.dateFormat = "HHmm"
         formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = TimeZone.autoupdatingCurrent
         return formatter
     }()
 
@@ -57,7 +57,7 @@ enum QuickCaptureService {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM dd, yyyy"
         formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = TimeZone.autoupdatingCurrent
         return formatter
     }()
 }

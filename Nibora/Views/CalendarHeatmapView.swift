@@ -165,7 +165,7 @@ struct CalendarHeatmapView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM"
         formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = TimeZone.autoupdatingCurrent
         return formatter
     }()
 
@@ -173,7 +173,7 @@ struct CalendarHeatmapView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM d, yyyy"
         formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = TimeZone.autoupdatingCurrent
         return formatter
     }()
 }

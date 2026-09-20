@@ -90,7 +90,7 @@ struct QuickSwitcherView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM dd, yyyy"
         formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = TimeZone.autoupdatingCurrent
         return formatter
     }()
 }

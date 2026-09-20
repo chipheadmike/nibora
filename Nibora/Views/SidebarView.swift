@@ -424,7 +424,7 @@ struct SidebarView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM"
         formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = TimeZone.autoupdatingCurrent
         return formatter
     }()
 
@@ -432,7 +432,7 @@ struct SidebarView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM yyyy"
         formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = TimeZone.autoupdatingCurrent
         return formatter
     }()
 }

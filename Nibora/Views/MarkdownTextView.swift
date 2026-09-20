@@ -11,21 +11,42 @@ import UniformTypeIdentifiers
 /// always exactly what gets written to disk — headings are colored by level
 /// per the user's theme and bold/italic spans render with real font traits,
 /// but this is purely a display layer on top; no character is ever added,
-/// removed, or reflowed for styling. `![](...)` image references stay
-/// literal text; AttachmentsStripView (shown below this editor) handles
-/// previewing them.
+/// removed, or reflowed for styling. `![](...)` image references and
+/// video-link references (see videoReferencePattern) stay literal text;
+/// AttachmentsStripView (shown below this editor) handles previewing them.
 struct MarkdownTextView: NSViewRepresentable {
     @Binding var text: String
     let baseDirectory: URL
     let saveImage: (NSImage, String?) -> String?
+    /// Saves a dropped/pasted video file into the entry's Attachments
+    /// folder, mirroring saveImage — returns the vault-relative markdown
+    /// path, or nil on failure.
+    let saveVideo: (URL) -> String?
     let theme: ThemeManager
     let tagColorPreferences: TagColorPreferences
     let hotkeyPreferences: TimestampHotkeyPreferences
     let fontPreferences: FontPreferences
     let isFocusModeEnabled: Bool
+    /// Weather-in-timestamp is Journal-only — enforced here, not inside
+    /// WeatherPreferences itself, since the toggle is a single global
+    /// setting but its effect shouldn't apply on a Freeform vault.
+    let isWeatherEligible: Bool
+    let weatherPreferences: WeatherPreferences
+    let weatherService: WeatherService
     let onWikilinkClick: (String) -> Void
+    /// Cmd+Click on a video reference calls this with its vault-relative
+    /// path instead of opening it as a URL — see applyVideoLink/videoScheme.
+    let onVideoClick: (String) -> Void
 
     static let imageReferencePattern = try! NSRegularExpression(pattern: #"!\[[^\]]*\]\(([^)]+)\)"#)
+    /// A plain "[label](path)" markdown link whose path ends in a common
+    /// video extension — distinguishes a dropped/pasted video reference
+    /// from a real "[text](url)" web link (applyLinks) sharing the exact
+    /// same syntax, purely by what it points to. Kept separate from
+    /// imageReferencePattern's "![]()" since video can't be inlined as an
+    /// actual image the way `![]()` implies.
+    static let videoReferencePattern = try! NSRegularExpression(pattern: #"\[([^\]]*)\]\(([^)]+\.(?:mov|mp4|m4v))\)"#, options: [.caseInsensitive])
+    static let videoLinkScheme = "nibora-video"
     static let boldItalicAsteriskPattern = try! NSRegularExpression(pattern: #"\*\*\*([^*]+?)\*\*\*"#)
     static let boldItalicUnderscorePattern = try! NSRegularExpression(pattern: #"___([^_]+?)___"#)
     static let boldAsteriskPattern = try! NSRegularExpression(pattern: #"\*\*([^*]+?)\*\*"#)
@@ -199,7 +220,11 @@ struct MarkdownTextView: NSViewRepresentable {
         textView.textContainer?.widthTracksTextView = true
 
         textView.saveImage = saveImage
+        textView.saveVideo = saveVideo
         textView.hotkeyPreferences = hotkeyPreferences
+        textView.isWeatherEligible = isWeatherEligible
+        textView.weatherPreferences = weatherPreferences
+        textView.weatherService = weatherService
 
         let scrollView = NSScrollView()
         scrollView.documentView = textView
@@ -214,18 +239,23 @@ struct MarkdownTextView: NSViewRepresentable {
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? DropHandlingTextView else { return }
         textView.saveImage = saveImage
+        textView.saveVideo = saveVideo
         textView.hotkeyPreferences = hotkeyPreferences
+        textView.isWeatherEligible = isWeatherEligible
+        textView.weatherPreferences = weatherPreferences
+        textView.weatherService = weatherService
         if textView.string != text {
             textView.string = text
         }
         context.coordinator.isFocusModeEnabled = isFocusModeEnabled
         context.coordinator.onWikilinkClick = onWikilinkClick
+        context.coordinator.onVideoClick = onVideoClick
         context.coordinator.colorScheme = context.environment.colorScheme
         Self.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, colorScheme: context.environment.colorScheme, tagColorPreferences: tagColorPreferences)
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, theme: theme, tagColorPreferences: tagColorPreferences, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, onWikilinkClick: onWikilinkClick)
+        Coordinator(text: $text, theme: theme, tagColorPreferences: tagColorPreferences, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, onWikilinkClick: onWikilinkClick, onVideoClick: onVideoClick)
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
@@ -235,19 +265,21 @@ struct MarkdownTextView: NSViewRepresentable {
         var fontPreferences: FontPreferences
         var isFocusModeEnabled: Bool
         var onWikilinkClick: (String) -> Void
+        var onVideoClick: (String) -> Void
         /// Set from context.environment in updateNSView — makeCoordinator()
         /// has no environment access, so this starts at a reasonable
         /// default and is corrected before the first real render (SwiftUI
         /// always calls updateNSView right after makeNSView/makeCoordinator).
         var colorScheme: ColorScheme = .light
 
-        init(text: Binding<String>, theme: ThemeManager, tagColorPreferences: TagColorPreferences, fontPreferences: FontPreferences, isFocusModeEnabled: Bool, onWikilinkClick: @escaping (String) -> Void) {
+        init(text: Binding<String>, theme: ThemeManager, tagColorPreferences: TagColorPreferences, fontPreferences: FontPreferences, isFocusModeEnabled: Bool, onWikilinkClick: @escaping (String) -> Void, onVideoClick: @escaping (String) -> Void) {
             self.text = text
             self.theme = theme
             self.tagColorPreferences = tagColorPreferences
             self.fontPreferences = fontPreferences
             self.isFocusModeEnabled = isFocusModeEnabled
             self.onWikilinkClick = onWikilinkClick
+            self.onVideoClick = onVideoClick
         }
 
         func textDidChange(_ notification: Notification) {
@@ -294,13 +326,50 @@ struct MarkdownTextView: NSViewRepresentable {
                 onWikilinkClick(rawTitle.removingPercentEncoding ?? rawTitle)
                 return true
             }
+            if url.scheme == MarkdownTextView.videoLinkScheme {
+                let rawPath = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
+                onVideoClick(rawPath.removingPercentEncoding ?? rawPath)
+                return true
+            }
             return false
         }
     }
 
     @discardableResult
     static func handleListContinuation(in textView: NSTextView) -> Bool {
-        handleBulletContinuation(in: textView) || handleNumberedListContinuation(in: textView)
+        handleTaskListContinuation(in: textView) || handleBulletContinuation(in: textView) || handleNumberedListContinuation(in: textView)
+    }
+
+    /// If the cursor is at the end of a "- [ ] item" (or "- [x] item") line,
+    /// Return continues the list with a fresh, always-unchecked checkbox —
+    /// checked here first since every task line also matches the plainer
+    /// bulletListPattern below and would otherwise fall through to it,
+    /// continuing as a bare "- " with the "[ ]"/"[x]" silently dropped. On
+    /// an empty "- [ ] " line, Return removes the marker and exits the list
+    /// instead of continuing forever, same as a plain bullet.
+    @discardableResult
+    private static func handleTaskListContinuation(in textView: NSTextView) -> Bool {
+        let nsString = textView.string as NSString
+        let cursorLocation = textView.selectedRange().location
+        let lineRange = nsString.lineRange(for: NSRange(location: cursorLocation, length: 0))
+        let prefixRange = NSRange(location: lineRange.location, length: cursorLocation - lineRange.location)
+        let linePrefix = nsString.substring(with: prefixRange) as NSString
+
+        guard let match = taskListPattern.firstMatch(in: linePrefix as String, range: NSRange(location: 0, length: linePrefix.length)) else {
+            return false
+        }
+
+        let indent = linePrefix.substring(with: match.range(at: 1))
+        let marker = linePrefix.substring(with: match.range(at: 2))
+        let content = linePrefix.substring(with: match.range(at: 6))
+
+        if content.trimmingCharacters(in: .whitespaces).isEmpty {
+            textView.insertText("", replacementRange: prefixRange)
+            textView.insertText("\n", replacementRange: textView.selectedRange())
+        } else {
+            textView.insertText("\n\(indent)\(marker) [ ] ", replacementRange: textView.selectedRange())
+        }
+        return true
     }
 
     /// If the cursor is at the end of a "- item" (or "* item") line, Return
@@ -377,6 +446,13 @@ struct MarkdownTextView: NSViewRepresentable {
         textStorage.beginEditing()
         textStorage.addAttribute(.foregroundColor, value: NSColor(resolvedTheme.bodyColor), range: fullRange)
         textStorage.addAttribute(.font, value: fonts.regular, range: fullRange)
+        // Unlike color/font above, nothing else guarantees a fresh strikethrough
+        // is fully cleared before this pass reapplies it — e.g. unchecking a
+        // task list item edits only its "[x]"/"[ ]" character, leaving the
+        // content's previously-applied strikethroughStyle attribute untouched
+        // (this same reset is skipped for ~~text~~ since editing that always
+        // touches/removes the delimiter characters the attribute was applied to).
+        textStorage.removeAttribute(.strikethroughStyle, range: fullRange)
 
         fullText.enumerateSubstrings(in: fullRange, options: [.byLines]) { _, lineRange, _, _ in
             let line = fullText.substring(with: lineRange)
@@ -391,6 +467,11 @@ struct MarkdownTextView: NSViewRepresentable {
             applyTag(in: textStorage, line: line, lineRange: lineRange, theme: resolvedTheme, fonts: fonts)
             applyEmphasis(in: textStorage, line: line, lineRange: lineRange, theme: resolvedTheme, fonts: fonts)
             applyLinks(in: textStorage, line: line, lineRange: lineRange, theme: resolvedTheme, fonts: fonts)
+            // After applyLinks so it can override the generic (and broken —
+            // a vault-relative path isn't a real openable URL) .link target
+            // applyLinks just set, on exactly the "[label](path)" spans that
+            // point at a video file.
+            applyVideoLink(in: textStorage, line: line, lineRange: lineRange, theme: resolvedTheme)
             applyWikilink(in: textStorage, line: line, lineRange: lineRange, theme: resolvedTheme)
             // Applied last so code spans win over any overlapping bold/italic/
             // link styling within backticks, matching standard markdown
@@ -510,6 +591,32 @@ struct MarkdownTextView: NSViewRepresentable {
             let mutedFont = NSFont(descriptor: fonts.regular.fontDescriptor, size: fonts.regular.pointSize * 0.75) ?? fonts.regular
             textStorage.addAttribute(.font, value: mutedFont, range: globalMetadataRange)
             textStorage.addAttribute(.foregroundColor, value: NSColor.tertiaryLabelColor, range: globalMetadataRange)
+        }
+    }
+
+    /// Runs after applyLinks and overrides its `.link` target on exactly the
+    /// "[label](path)" spans whose path is a video file — applyLinks just
+    /// pointed `.link` at the raw vault-relative path (not a real openable
+    /// URL); this replaces it with a private `nibora-video://` scheme, same
+    /// Cmd+Click-routing trick as the task checkboxes/wikilinks, resolved
+    /// via Coordinator.clickedOnLink → onVideoClick, which opens the file
+    /// with the user's default video player. Foreground color/underline are
+    /// reapplied too even though applyLinks already set them identically —
+    /// harmless, and keeps this pass self-contained if that ever changes.
+    private static func applyVideoLink(in textStorage: NSTextStorage, line: String, lineRange: NSRange, theme: ResolvedTheme) {
+        let nsLine = line as NSString
+        for match in videoReferencePattern.matches(in: line, range: NSRange(location: 0, length: nsLine.length)) {
+            let textRange = match.range(at: 1)
+            let relativePath = nsLine.substring(with: match.range(at: 2))
+            let globalTextRange = NSRange(location: lineRange.location + textRange.location, length: textRange.length)
+
+            textStorage.addAttribute(.foregroundColor, value: NSColor(theme.linkColor), range: globalTextRange)
+            textStorage.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: globalTextRange)
+
+            guard let encodedPath = relativePath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+                  let url = URL(string: "\(videoLinkScheme):///\(encodedPath)") else { continue }
+            textStorage.addAttribute(.link, value: url, range: globalTextRange)
+            textStorage.addAttribute(.cursor, value: NSCursor.pointingHand, range: globalTextRange)
         }
     }
 
@@ -732,19 +839,25 @@ struct MarkdownTextView: NSViewRepresentable {
     }
 }
 
-/// NSTextView subclass that intercepts image drags/pastes (Finder or Photos)
-/// and routes them through `saveImage` so they land as real vault files
-/// referenced by a plain `![]()` link inserted as literal text.
+/// NSTextView subclass that intercepts image/video drags/pastes (Finder or
+/// Photos) and routes them through `saveImage`/`saveVideo` so they land as
+/// real vault files — an image as a `![]()` reference, a video as a plain
+/// `[label](path)` link (see videoReferencePattern) — inserted as literal
+/// text.
 final class DropHandlingTextView: NSTextView {
     var saveImage: ((NSImage, String?) -> String?)?
+    var saveVideo: ((URL) -> String?)?
     var hotkeyPreferences: TimestampHotkeyPreferences?
+    var isWeatherEligible = false
+    var weatherPreferences: WeatherPreferences?
+    var weatherService: WeatherService?
 
     private var hotkeyMonitor: Any?
     private static let timestampFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "HHmm"
         formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = TimeZone.autoupdatingCurrent
         return formatter
     }()
 
@@ -783,7 +896,11 @@ final class DropHandlingTextView: NSTextView {
 
     private func insertTimestamp() {
         let timestamp = Self.timestampFormatter.string(from: Date())
-        insertText("\(timestamp) - ", replacementRange: selectedRange())
+        if isWeatherEligible, weatherPreferences?.isEnabled == true, let temperature = weatherService?.currentTemperatureText {
+            insertText("\(timestamp) - \(temperature) ", replacementRange: selectedRange())
+        } else {
+            insertText("\(timestamp) - ", replacementRange: selectedRange())
+        }
     }
 
     private var linkPopover: NSPopover?
@@ -892,33 +1009,42 @@ final class DropHandlingTextView: NSTextView {
                 return
             }
         }
+        if let saveVideo, let videoURL = videoFileURL(in: pasteboard) {
+            insertVideoLink(videoURL, at: selectedRange().location, save: saveVideo)
+            return
+        }
         super.paste(sender)
     }
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        if pasteboardContainsImage(sender.draggingPasteboard) { return .copy }
+        if pasteboardContainsImage(sender.draggingPasteboard) || videoFileURL(in: sender.draggingPasteboard) != nil {
+            return .copy
+        }
         return super.draggingEntered(sender)
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
         let pasteboard = sender.draggingPasteboard
-        guard pasteboardContainsImage(pasteboard), let saveImage else {
-            return super.performDragOperation(sender)
-        }
-
         let dropPoint = convert(sender.draggingLocation, from: nil)
         let insertionIndex = characterIndexForInsertion(at: dropPoint)
 
-        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
-           let imageURL = urls.first(where: { isImageFile($0) }),
-           let image = NSImage(contentsOf: imageURL) {
-            insertImageLink(image, suggestedName: imageURL.lastPathComponent, at: insertionIndex, save: saveImage)
-            return true
+        if pasteboardContainsImage(pasteboard), let saveImage {
+            if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
+               let imageURL = urls.first(where: { isImageFile($0) }),
+               let image = NSImage(contentsOf: imageURL) {
+                insertImageLink(image, suggestedName: imageURL.lastPathComponent, at: insertionIndex, save: saveImage)
+                return true
+            }
+
+            if let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
+               let image = images.first {
+                insertImageLink(image, suggestedName: nil, at: insertionIndex, save: saveImage)
+                return true
+            }
         }
 
-        if let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
-           let image = images.first {
-            insertImageLink(image, suggestedName: nil, at: insertionIndex, save: saveImage)
+        if let saveVideo, let videoURL = videoFileURL(in: pasteboard) {
+            insertVideoLink(videoURL, at: insertionIndex, save: saveVideo)
             return true
         }
 
@@ -928,6 +1054,20 @@ final class DropHandlingTextView: NSTextView {
     private func insertImageLink(_ image: NSImage, suggestedName: String?, at index: Int, save: (NSImage, String?) -> String?) {
         guard let relativePath = save(image, suggestedName), let textStorage else { return }
         let markdown = "![](\(relativePath))"
+        textStorage.replaceCharacters(in: NSRange(location: index, length: 0), with: markdown)
+        didChangeText()
+    }
+
+    /// Inserts a plain "[🎬 name.mov](Attachments/...)" link — deliberately
+    /// not `![]()` (that syntax means "renderable image," which a video
+    /// isn't) and deliberately not hidden/thumbnail-ified inline (see this
+    /// file's top doc comment on why in-editor rendering tricks are
+    /// avoided). AttachmentsStripView shows a real poster-frame thumbnail
+    /// below the editor instead; Cmd+Click on this link also opens the file,
+    /// via applyVideoLink's private-scheme routing.
+    private func insertVideoLink(_ fileURL: URL, at index: Int, save: (URL) -> String?) {
+        guard let relativePath = save(fileURL), let textStorage else { return }
+        let markdown = "[🎬 \(fileURL.lastPathComponent)](\(relativePath))"
         textStorage.replaceCharacters(in: NSRange(location: index, length: 0), with: markdown)
         didChangeText()
     }
@@ -943,6 +1083,20 @@ final class DropHandlingTextView: NSTextView {
     private func isImageFile(_ url: URL) -> Bool {
         guard let type = UTType(filenameExtension: url.pathExtension) else { return false }
         return type.conforms(to: .image)
+    }
+
+    /// Video has no pasteboard-native representation the way NSImage covers
+    /// images — only ever arrives as a file URL (Finder drag, or a copied
+    /// file pasted), so unlike pasteboardContainsImage there's no separate
+    /// raw-data branch to check.
+    private func videoFileURL(in pasteboard: NSPasteboard) -> URL? {
+        guard let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] else { return nil }
+        return urls.first(where: { isVideoFile($0) })
+    }
+
+    private func isVideoFile(_ url: URL) -> Bool {
+        guard let type = UTType(filenameExtension: url.pathExtension) else { return false }
+        return type.conforms(to: .movie)
     }
 }
 

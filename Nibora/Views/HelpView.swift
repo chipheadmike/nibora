@@ -74,7 +74,9 @@ struct HelpView: View {
     - `[[Entry Title]]` to link directly to another entry by its exact title — Cmd+Click to jump there
     - `#tag` anywhere in a line — filterable from the sidebar
 
-    Drag or paste an image into an entry and it's saved into that month's Attachments folder and shown in the strip below the editor. Deleting the image from the text moves its file to the Trash too, automatically, the next time the entry saves.
+    Drag or paste an image into an entry and it's saved into an Attachments folder alongside it and shown in the strip below the editor — click a thumbnail there for a bigger preview (its size is adjustable in Settings > Editor). Deleting the image from the text moves its file to the Trash too, automatically, the next time the entry saves.
+
+    Video works the same way — drag or paste a video file in and it's saved alongside it as a plain link (e.g. `[🎬 clip.mov](...)`, left as visible text — video can't be inlined as an image the way `![]()` can) and shown as a poster-frame thumbnail in the strip. Click it (or Cmd+Click the link in the text) to open it in your default video player.
 
     Entries are also indexed into macOS's system-wide Spotlight search (Cmd+Space) — search from anywhere on your Mac and clicking a result jumps straight into that entry, entirely on-device.
 
@@ -93,7 +95,7 @@ struct HelpView: View {
     - **Ask Nibora** — ask questions about your own journal in plain English. Uses whichever AI provider is selected in Settings > AI: On-Device (Apple Intelligence, free and fully local), or your own Claude or ChatGPT API key (journal excerpts are sent to that provider's servers, billed per-use to your own account)
     - **Journal Digest** — entry/word counts, a mood chart, a word cloud, and an AI-generated recap for the past 7 days, 30 days, or year (a built-in "Year in Review"), surfacing recurring themes and mood shifts. Same provider and privacy rules as Ask Nibora
     - **Writing Calendar** (Journal only) — a GitHub-style heatmap of writing activity over the past year; click a day to jump to that entry
-    - **Attachments** — every image across the whole vault in one browsable grid, not just the current entry's
+    - **Attachments** — every photo and video across the whole vault in one browsable grid, not just the current entry's
 
     In a Freeform vault's sidebar specifically:
     - Right-click a folder for its own **New Entry**, **New Folder**, **Rename…**, and **Delete…** (a folder must be empty to delete — move or remove what's inside first)
@@ -104,6 +106,7 @@ struct HelpView: View {
     - **Read Aloud** (speaker icon) — reads the entry aloud, with markdown syntax stripped to clean prose first. Voice, rate, and pitch are configurable in Settings > Editor
     - **Focus Mode** (eye icon) — dims every paragraph except the one you're writing
     - **Preview** (split-rectangle icon) — a second pane with fully rendered markdown, no raw syntax
+    - **Photo Strip** (stacked-photos icon) — shows or hides the row of image thumbnails below the editor; remembered the next time you open Nibora
     - **Export to PDF** — saves the current entry as a PDF
     - **Version History** (clock icon) — periodic automatic snapshots of the entry as you edit, with one-click restore
 
@@ -132,7 +135,7 @@ struct HelpView: View {
 
     - **General** — vault location (and switching between every vault you've opened), window title, sort order (with an ascending/descending option for the date-based modes), and a one-click "Export Vault as Zip…" backup of everything.
     - **Entries** — a reminder notification for days you haven't written yet (Journal only), and optional named entry templates (with a `{{weekday}}` placeholder — with more than one, New Entry becomes a menu to pick from, in a Journal vault).
-    - **Editor** — font/size, the timestamp hotkey, and Read Aloud's voice/rate/pitch (with a live preview button).
+    - **Editor** — font/size, the timestamp hotkey (optionally with the current temperature for a zip code you enter — Journal only), how large a clicked photo's preview popup appears, and Read Aloud's voice/rate/pitch (with a live preview button).
     - **Appearance** — a Display picker to override Light/Dark/System for Nibora only, and one-click theme presets.
     - **Colors** — a color picker for every styled markdown element (every color automatically nudges its brightness to stay legible in whichever Light/Dark mode is active), plus the code-block font.
     - **Import** — bring in Markdown files from another app, and scan for orphaned attachment images no entry references anymore (mainly catches leftovers from a deleted entry or files edited outside the app — removing an image from an entry's text already cleans up its file automatically).

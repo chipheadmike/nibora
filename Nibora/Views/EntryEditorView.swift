@@ -15,11 +15,15 @@ struct EntryEditorView: View {
     let onNavigateToEntry: (String) -> Void
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(VaultManager.self) private var vaultManager
     @Environment(ThemeManager.self) private var themeManager
     @Environment(TagColorPreferences.self) private var tagColorPreferences
     @Environment(TimestampHotkeyPreferences.self) private var hotkeyPreferences
     @Environment(FontPreferences.self) private var fontPreferences
     @Environment(SpeechVoicePreferences.self) private var speechVoicePreferences
+    @Environment(WeatherPreferences.self) private var weatherPreferences
+    @Environment(WeatherService.self) private var weatherService
+    @Environment(ImageAttachmentPreferences.self) private var imageAttachmentPreferences
 
     @State private var title: String = ""
     @State private var bodyText: String = ""
@@ -72,12 +76,17 @@ struct EntryEditorView: View {
                     text: $bodyText,
                     baseDirectory: fileURL.deletingLastPathComponent(),
                     saveImage: saveDroppedImage,
+                    saveVideo: saveDroppedVideo,
                     theme: themeManager,
                     tagColorPreferences: tagColorPreferences,
                     hotkeyPreferences: hotkeyPreferences,
                     fontPreferences: fontPreferences,
                     isFocusModeEnabled: isFocusModeEnabled,
-                    onWikilinkClick: onNavigateToEntry
+                    isWeatherEligible: vaultManager.currentVaultType == .journal,
+                    weatherPreferences: weatherPreferences,
+                    weatherService: weatherService,
+                    onWikilinkClick: onNavigateToEntry,
+                    onVideoClick: openVideo
                 )
                 .onChange(of: bodyText) { scheduleSave() }
 
@@ -94,7 +103,9 @@ struct EntryEditorView: View {
                 }
             }
 
-            AttachmentsStripView(text: bodyText, baseDirectory: fileURL.deletingLastPathComponent())
+            if imageAttachmentPreferences.isStripVisible {
+                AttachmentsStripView(text: bodyText, baseDirectory: fileURL.deletingLastPathComponent())
+            }
 
             BacklinksView(entries: backlinkEntries) { linkedEntry in
                 onNavigateToEntry(linkedEntry.title)
@@ -142,6 +153,14 @@ struct EntryEditorView: View {
                     Image(systemName: isPreviewEnabled ? "rectangle.split.2x1.fill" : "rectangle.split.2x1")
                 }
                 .help(isPreviewEnabled ? "Hide Preview" : "Show Preview")
+            }
+            ToolbarItem {
+                Button {
+                    imageAttachmentPreferences.isStripVisible.toggle()
+                } label: {
+                    Image(systemName: imageAttachmentPreferences.isStripVisible ? "photo.stack.fill" : "photo.stack")
+                }
+                .help(imageAttachmentPreferences.isStripVisible ? "Hide Photo Strip" : "Show Photo Strip")
             }
             ToolbarItem {
                 Button("Export to PDF", systemImage: "square.and.arrow.up") {
@@ -208,7 +227,9 @@ struct EntryEditorView: View {
         )
 
         try? EntryFileWriter.write(frontmatter: frontmatter, body: bodyText, to: fileURL)
-        ImageAttachmentService.pruneRemovedImages(oldBody: oldBody, newBody: bodyText, attachmentsFolder: fileURL.deletingLastPathComponent().appendingPathComponent("Attachments"))
+        let attachmentsFolder = fileURL.deletingLastPathComponent().appendingPathComponent("Attachments")
+        ImageAttachmentService.pruneRemovedImages(oldBody: oldBody, newBody: bodyText, attachmentsFolder: attachmentsFolder)
+        VideoAttachmentService.pruneRemovedVideos(oldBody: oldBody, newBody: bodyText, attachmentsFolder: attachmentsFolder)
         // force: true — see the identical comment in SidebarView's
         // persistEntryFrontmatter; we just wrote this file ourselves.
         EntryIndexer(modelContext: modelContext).reindexSingleFile(at: fileURL, vaultURL: vaultURL, force: true)
@@ -240,5 +261,19 @@ struct EntryEditorView: View {
     private func saveDroppedImage(_ image: NSImage, suggestedName: String?) -> String? {
         let attachmentsFolder = fileURL.deletingLastPathComponent().appendingPathComponent("Attachments")
         return try? ImageAttachmentService.saveImage(image, originalName: suggestedName, in: attachmentsFolder).relativeMarkdownPath
+    }
+
+    private func saveDroppedVideo(_ sourceURL: URL) -> String? {
+        let attachmentsFolder = fileURL.deletingLastPathComponent().appendingPathComponent("Attachments")
+        return try? VideoAttachmentService.saveVideo(from: sourceURL, originalName: sourceURL.lastPathComponent, in: attachmentsFolder).relativeMarkdownPath
+    }
+
+    /// Opens a Cmd+Clicked video reference with the user's default player
+    /// (QuickTime, typically) — no in-app playback UI, matching how the
+    /// photo popup hands enlargement off to a simple, low-risk SwiftUI
+    /// popover rather than anything more elaborate.
+    private func openVideo(relativePath: String) {
+        let videoURL = fileURL.deletingLastPathComponent().appendingPathComponent(relativePath)
+        NSWorkspace.shared.open(videoURL)
     }
 }
