@@ -72,4 +72,4 @@ SwiftData is used only as a fast index over those files. It can be rebuilt at an
 
 ## License
 
-No license has been chosen yet. Until one is added, all rights are reserved.
+Released under the [MIT License](LICENSE).
