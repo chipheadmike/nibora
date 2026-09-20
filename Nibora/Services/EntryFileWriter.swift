@@ -10,7 +10,7 @@ enum EntryFileWriter {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM"
         formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = TimeZone.autoupdatingCurrent
         return formatter
     }()
 

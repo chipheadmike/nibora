@@ -115,7 +115,7 @@ private struct GeneralSettingsTab: View {
 
         }
         .formStyle(.grouped)
-        .frame(width: 440)
+        .frame(width: 680)
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -138,7 +138,7 @@ private struct GeneralSettingsTab: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = TimeZone.autoupdatingCurrent
         return formatter
     }()
 }
@@ -224,7 +224,7 @@ private struct EntriesSettingsTab: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 440)
+        .frame(width: 680)
         .fixedSize(horizontal: false, vertical: true)
     }
 }
@@ -233,12 +233,18 @@ private struct EditorSettingsTab: View {
     @Environment(FontPreferences.self) private var fontPreferences
     @Environment(TimestampHotkeyPreferences.self) private var hotkeyPreferences
     @Environment(SpeechVoicePreferences.self) private var speechVoicePreferences
+    @Environment(VaultManager.self) private var vaultManager
+    @Environment(WeatherPreferences.self) private var weatherPreferences
+    @Environment(WeatherService.self) private var weatherService
+    @Environment(ImageAttachmentPreferences.self) private var imageAttachmentPreferences
 
     @State private var previewReader = SpeechReader()
 
     var body: some View {
         @Bindable var fontPreferences = fontPreferences
         @Bindable var speechVoicePreferences = speechVoicePreferences
+        @Bindable var weatherPreferences = weatherPreferences
+        @Bindable var imageAttachmentPreferences = imageAttachmentPreferences
 
         Form {
             Section("Font") {
@@ -258,6 +264,43 @@ private struct EditorSettingsTab: View {
             Section("Timestamp Hotkey") {
                 ShortcutRecorderView(preferences: hotkeyPreferences)
                 Text("While writing an entry, press this to insert the current 24-hour time (e.g. \"1350 - \") at the cursor.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            // Weather doesn't apply to a Freeform vault's "the day" — hidden
+            // entirely there, same as Reminders.
+            if vaultManager.currentVaultType == .journal {
+                Section("Weather") {
+                    Toggle("Include temperature with the timestamp hotkey", isOn: $weatherPreferences.isEnabled)
+                    TextField("Zip Code", text: $weatherPreferences.zipCode)
+                        .disabled(!weatherPreferences.isEnabled)
+                        .onSubmit {
+                            weatherService.refreshIfNeeded(zipCode: weatherPreferences.zipCode)
+                        }
+                    if weatherPreferences.isEnabled {
+                        if let current = weatherService.currentTemperatureText {
+                            LabeledContent("Current", value: current)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else if !weatherPreferences.zipCode.trimmingCharacters(in: .whitespaces).isEmpty {
+                            Text("Fetching…")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Text("e.g. \"1054 - 74F \". Looked up from the zip code via a free weather API (no account needed) — kept fresh in the background so the hotkey itself never has to wait on a network call.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Attachments") {
+                VStack(alignment: .leading) {
+                    Text("Popup Size: \(Int(imageAttachmentPreferences.previewMaxDimension))pt")
+                    Slider(value: $imageAttachmentPreferences.previewMaxDimension, in: ImageAttachmentPreferences.dimensionRange, step: 20)
+                }
+                Text("Caps how large a photo's preview appears when you click its thumbnail below an entry. A smaller image is never scaled up past its real size.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -305,7 +348,7 @@ private struct EditorSettingsTab: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 440)
+        .frame(width: 680)
         .fixedSize(horizontal: false, vertical: true)
         .onDisappear {
             previewReader.stop()
@@ -364,7 +407,7 @@ private struct AppearanceSettingsTab: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 440)
+        .frame(width: 680)
         .fixedSize(horizontal: false, vertical: true)
     }
 }
@@ -419,7 +462,7 @@ private struct ColorsSettingsTab: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 440)
+        .frame(width: 680)
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -487,7 +530,7 @@ private struct ImportSettingsTab: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 440)
+        .frame(width: 680)
         .fixedSize(horizontal: false, vertical: true)
         .sheet(isPresented: $isOrphanScanPresented) {
             OrphanedAttachmentsView(orphans: scannedOrphans)
@@ -541,7 +584,7 @@ private struct PasswordSettingsTab: View {
                 systemImage: "lock.fill",
                 description: Text("Password settings are unavailable while the app is locked.")
             )
-            .frame(width: 440, height: 300)
+            .frame(width: 680, height: 300)
         } else {
             settingsForm
         }
@@ -617,7 +660,7 @@ private struct PasswordSettingsTab: View {
             .disabled(!preferences.hasPassword)
         }
         .formStyle(.grouped)
-        .frame(width: 440)
+        .frame(width: 680)
         .fixedSize(horizontal: false, vertical: true)
         .sheet(isPresented: Binding(
             get: { generatedRecoveryCode != nil },
@@ -699,7 +742,7 @@ private struct AISettingsTab: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 440)
+        .frame(width: 680)
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -776,5 +819,7 @@ private struct RecoveryCodeRevealView: View {
         .environment(AIProviderPreferences())
         .environment(AppAppearancePreferences())
         .environment(StreakReminderPreferences())
+        .environment(WeatherPreferences())
+        .environment(WeatherService())
         .modelContainer(for: JournalEntryRecord.self, inMemory: true)
 }

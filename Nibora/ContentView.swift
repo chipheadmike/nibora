@@ -16,6 +16,8 @@ struct ContentView: View {
     @Environment(EntryTemplatePreferences.self) private var entryTemplatePreferences
     @Environment(AppLockManager.self) private var appLockManager
     @Environment(StreakReminderPreferences.self) private var reminderPreferences
+    @Environment(WeatherPreferences.self) private var weatherPreferences
+    @Environment(WeatherService.self) private var weatherService
     @Environment(\.modelContext) private var modelContext
     @State private var selection: JournalEntryRecord?
     @State private var searchText = ""
@@ -94,6 +96,22 @@ struct ContentView: View {
         .onChange(of: reminderPreferences.isEnabled) { refreshReminderSchedule() }
         .onChange(of: reminderPreferences.reminderHour) { refreshReminderSchedule() }
         .onChange(of: reminderPreferences.reminderMinute) { refreshReminderSchedule() }
+        .task(id: "\(weatherPreferences.isEnabled)-\(weatherPreferences.zipCode)-\(vaultManager.currentVaultType.rawValue)") {
+            await watchWeather()
+        }
+    }
+
+    /// Keeps WeatherService's cached temperature fresh in the background so
+    /// the timestamp hotkey (which must feel instant) never waits on a
+    /// network call. Restarts (via the .task id above) whenever the toggle,
+    /// zip code, or vault type changes, so editing the zip code refreshes
+    /// right away instead of waiting up to freshnessWindow.
+    private func watchWeather() async {
+        guard weatherPreferences.isEnabled, vaultManager.currentVaultType == .journal else { return }
+        while !Task.isCancelled {
+            weatherService.refreshIfNeeded(zipCode: weatherPreferences.zipCode)
+            try? await Task.sleep(for: .seconds(900))
+        }
     }
 
     private func refreshReminderSchedule() {
@@ -383,7 +401,7 @@ struct ContentView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM dd, yyyy"
         formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = TimeZone.autoupdatingCurrent
         return formatter
     }()
 }
@@ -402,6 +420,8 @@ struct ContentView: View {
         .environment(AIProviderPreferences())
         .environment(AppAppearancePreferences())
         .environment(StreakReminderPreferences())
+        .environment(WeatherPreferences())
+        .environment(WeatherService())
         .environment(AppLockManager(preferences: PasswordLockPreferences()))
         .modelContainer(for: JournalEntryRecord.self, inMemory: true)
 }
