@@ -44,8 +44,12 @@ struct MarkdownTextView: NSViewRepresentable {
     /// from a real "[text](url)" web link (applyLinks) sharing the exact
     /// same syntax, purely by what it points to. Kept separate from
     /// imageReferencePattern's "![]()" since video can't be inlined as an
-    /// actual image the way `![]()` implies.
-    static let videoReferencePattern = try! NSRegularExpression(pattern: #"\[([^\]]*)\]\(([^)]+\.(?:mov|mp4|m4v))\)"#, options: [.caseInsensitive])
+    /// actual image the way `![]()` implies. Only vault-relative paths
+    /// count: the leading `(?<!!)` keeps "![](x.mov)" from also matching as
+    /// a link, and the `(?![A-Za-z][A-Za-z0-9+.-]*:)` lookahead rejects
+    /// anything with a URL scheme, so a real web link that merely ends in
+    /// ".mp4" stays an ordinary link.
+    static let videoReferencePattern = try! NSRegularExpression(pattern: #"(?<!!)\[([^\]]*)\]\(((?![A-Za-z][A-Za-z0-9+.-]*:)[^)]+\.(?:mov|mp4|m4v))\)"#, options: [.caseInsensitive])
     static let videoLinkScheme = "nibora-video"
     static let boldItalicAsteriskPattern = try! NSRegularExpression(pattern: #"\*\*\*([^*]+?)\*\*\*"#)
     static let boldItalicUnderscorePattern = try! NSRegularExpression(pattern: #"___([^_]+?)___"#)
