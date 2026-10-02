@@ -69,7 +69,15 @@ struct SidebarView: View {
 
             tagFilterRow
 
-            list
+            if entries.isEmpty {
+                ContentUnavailableView(
+                    "No Entries Yet",
+                    systemImage: "book.closed",
+                    description: Text("Your entries will appear here, grouped by month. Click New Entry above to write today's page.")
+                )
+            } else {
+                list
+            }
         }
     }
 
@@ -366,7 +374,7 @@ struct SidebarView: View {
     private func persistEntryFrontmatter(_ entry: JournalEntryRecord) {
         let fileURL = vaultURL.appendingPathComponent(entry.relativePath)
         guard let contents = try? String(contentsOf: fileURL, encoding: .utf8) else { return }
-        let body = MarkdownFrontmatterParser.parse(contents).body
+        let parsed = MarkdownFrontmatterParser.parse(contents)
         let frontmatter = EntryFrontmatter(
             id: entry.id,
             title: entry.title,
@@ -374,9 +382,10 @@ struct SidebarView: View {
             createdAt: entry.createdAt,
             modifiedAt: entry.modifiedAt,
             icon: entry.icon,
-            sortOrder: entry.sortOrder
+            sortOrder: entry.sortOrder,
+            attachments: EntryFrontmatter.decodeAttachments(parsed.fields["attachments"])
         )
-        try? EntryFileWriter.write(frontmatter: frontmatter, body: body, to: fileURL)
+        try? EntryFileWriter.write(frontmatter: frontmatter, body: parsed.body, to: fileURL)
         // force: true — we just wrote this file ourselves, so we already
         // know it changed. The mtime-skip check reindexSingleFile normally
         // does exists for the passive full-vault rescan; here it's actively

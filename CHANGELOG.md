@@ -14,6 +14,7 @@ All notable changes to Nibora will be documented in this file.
 - Multiple vaults, theme presets, light / dark override, vault backup to zip, PDF export, read-aloud, focus mode, preview pane and per-entry version history
 - Optional privacy-screen password lock with a recovery code and email recovery
 - Optional current temperature in the timestamp hotkey (Journal only)
+- Attachments no longer clutter the text: dropped or pasted photos and videos are listed in the entry's frontmatter and shown only in the strip below the editor, which now also accepts drops and has a right-click menu (Reveal in Finder, Remove). Older entries' inline `![]()` lines still show there, with a one-click "Move out of text"
 - Video attachments: drag or paste a video into an entry; thumbnails in the entry strip and the vault-wide Attachments gallery, opened in your default player
 - Settings for the photo preview popup size, and a toolbar toggle to show / hide the photo strip
 
