@@ -1001,24 +1001,7 @@ final class DropHandlingTextView: NSTextView {
     }
 
     override func paste(_ sender: Any?) {
-        let pasteboard = NSPasteboard.general
-        if let saveImage, pasteboardContainsImage(pasteboard) {
-            if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
-               let imageURL = urls.first(where: { isImageFile($0) }),
-               let image = NSImage(contentsOf: imageURL) {
-                saveImage(image, imageURL.lastPathComponent)
-                return
-            }
-            if let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
-               let image = images.first {
-                saveImage(image, nil)
-                return
-            }
-        }
-        if let saveVideo, let videoURL = videoFileURL(in: pasteboard) {
-            saveVideo(videoURL)
-            return
-        }
+        if attachAll(from: NSPasteboard.general) { return }
         super.paste(sender)
     }
 
@@ -1030,29 +1013,48 @@ final class DropHandlingTextView: NSTextView {
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        let pasteboard = sender.draggingPasteboard
-
-        if pasteboardContainsImage(pasteboard), let saveImage {
-            if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
-               let imageURL = urls.first(where: { isImageFile($0) }),
-               let image = NSImage(contentsOf: imageURL) {
-                saveImage(image, imageURL.lastPathComponent)
-                return true
-            }
-
-            if let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
-               let image = images.first {
-                saveImage(image, nil)
-                return true
-            }
-        }
-
-        if let saveVideo, let videoURL = videoFileURL(in: pasteboard) {
-            saveVideo(videoURL)
-            return true
-        }
+        if attachAll(from: sender.draggingPasteboard) { return true }
 
         return super.performDragOperation(sender)
+    }
+
+    /// Attaches every image and video found on `pasteboard`, not just the
+    /// first — a multi-file Finder drag/paste puts one NSURL per item on
+    /// the pasteboard, and the earlier `.first(where:)` version silently
+    /// discarded everything past the first match. Falls back to raw
+    /// NSImage data (every image on the pasteboard, not just the first
+    /// there either) only when no file URLs were found, since a Finder
+    /// drag that already resolved via URL can also carry a decoded-image
+    /// representation of those same files, which would double-attach them.
+    /// Returns whether anything was attached at all.
+    private func attachAll(from pasteboard: NSPasteboard) -> Bool {
+        var attachedSomething = false
+
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
+            if let saveImage {
+                for url in urls where isImageFile(url) {
+                    guard let image = NSImage(contentsOf: url) else { continue }
+                    saveImage(image, url.lastPathComponent)
+                    attachedSomething = true
+                }
+            }
+            if let saveVideo {
+                for url in urls where isVideoFile(url) {
+                    saveVideo(url)
+                    attachedSomething = true
+                }
+            }
+        }
+
+        if !attachedSomething, let saveImage,
+           let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage] {
+            for image in images {
+                saveImage(image, nil)
+                attachedSomething = true
+            }
+        }
+
+        return attachedSomething
     }
 
     private func pasteboardContainsImage(_ pasteboard: NSPasteboard) -> Bool {
