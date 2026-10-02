@@ -5,62 +5,95 @@
 
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
-/// Horizontal strip of thumbnails for every `![]()` image and video-link
-/// reference in the current entry's text, in the order they appear. Click
-/// an image thumbnail for a full-size preview popover; click a video
-/// thumbnail to open it in the default video player (QuickTime, typically)
-/// — no in-app playback, kept as simple/low-risk as the image popover.
+/// Horizontal strip of thumbnails for an entry's photos and videos — the
+/// frontmatter `attachments` list, in the order added, followed by any
+/// older inline `![]()` / video-link references still sitting in the body
+/// text. Click an image for a full-size preview popover; click a video to
+/// open it in the default player. Right-click any item to reveal it in
+/// Finder or remove it (which moves its file to the Trash). Files can also
+/// be dropped straight onto the strip.
 /// Exists because click-detection inside the plain-text NSTextView editor
 /// isn't reliable in this beta SDK — plain SwiftUI buttons are the fallback.
 struct AttachmentsStripView: View {
+    /// The entry body — only read for older inline references.
     let text: String
+    /// The entry's frontmatter attachment list.
+    let attachments: [String]
     let baseDirectory: URL
+    let onRemove: (String) -> Void
+    let onMoveInlineOut: () -> Void
+    let onDrop: ([NSItemProvider]) -> Bool
 
     @Environment(ImageAttachmentPreferences.self) private var imageAttachmentPreferences
     @State private var previewPath: String?
     @State private var videoPosterFrames: [String: NSImage] = [:]
 
-    private enum Attachment {
-        case image(String)
-        case video(String)
+    private var inlineOnlyPaths: [String] {
+        let listed = Set(attachments)
+        return AttachmentReferences.inlinePaths(in: text).filter { !listed.contains($0) }
     }
 
-    /// Both reference kinds located and merged in document order, so a
-    /// video dropped between two photos shows up where it was dropped
-    /// rather than all videos trailing all images.
-    private var attachments: [Attachment] {
-        let nsString = text as NSString
-        let fullRange = NSRange(location: 0, length: nsString.length)
-        var located: [(Int, Attachment)] = []
-
-        for match in MarkdownTextView.imageReferencePattern.matches(in: text, range: fullRange) {
-            located.append((match.range.location, .image(nsString.substring(with: match.range(at: 1)))))
-        }
-        for match in MarkdownTextView.videoReferencePattern.matches(in: text, range: fullRange) {
-            located.append((match.range.location, .video(nsString.substring(with: match.range(at: 2)))))
-        }
-
-        return located.sorted { $0.0 < $1.0 }.map(\.1)
+    private var allPaths: [String] {
+        var seen = Set<String>()
+        return (attachments + inlineOnlyPaths).filter { seen.insert($0).inserted }
     }
 
     var body: some View {
-        if !attachments.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
+        if !allPaths.isEmpty {
+            HorizontalScroller {
                 HStack(spacing: 8) {
-                    ForEach(Array(attachments.enumerated()), id: \.offset) { _, attachment in
-                        switch attachment {
-                        case .image(let relativePath):
-                            imageThumbnail(for: relativePath)
-                        case .video(let relativePath):
-                            videoThumbnail(for: relativePath)
+                    if !inlineOnlyPaths.isEmpty {
+                        moveOutButton
+                    }
+                    ForEach(allPaths, id: \.self) { relativePath in
+                        Group {
+                            switch AttachmentReferences.kind(of: relativePath) {
+                            case .image:
+                                imageThumbnail(for: relativePath)
+                            case .video:
+                                videoThumbnail(for: relativePath)
+                            }
+                        }
+                        .contextMenu {
+                            Button("Reveal in Finder") {
+                                NSWorkspace.shared.activateFileViewerSelecting([baseDirectory.appendingPathComponent(relativePath)])
+                            }
+                            Divider()
+                            Button("Remove", role: .destructive) {
+                                onRemove(relativePath)
+                            }
                         }
                     }
                 }
                 .padding(8)
             }
             .frame(height: 96)
+            .onDrop(of: [.fileURL, .image], isTargeted: nil) { providers in
+                onDrop(providers)
+            }
         }
+    }
+
+    /// Entries from before attachments moved out of the text still have
+    /// `![]()` lines in the body — shown here, and cleaned out on request
+    /// (never automatically, since it rewrites the entry's text).
+    private var moveOutButton: some View {
+        Button {
+            onMoveInlineOut()
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: "text.badge.minus")
+                    .font(.title3)
+                Text("Move \(inlineOnlyPaths.count) out of text")
+                    .font(.caption2)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(width: 84, height: 80)
+        }
+        .buttonStyle(.bordered)
+        .help("Remove these photo/video lines from the entry's text. They stay in the strip.")
     }
 
     @ViewBuilder
@@ -130,5 +163,56 @@ struct AttachmentsStripView: View {
             .resizable()
             .frame(width: size.width, height: size.height)
             .padding(8)
+    }
+}
+
+/// A horizontal-only NSScrollView hosting plain SwiftUI content. Unlike
+/// SwiftUI's own `ScrollView(.horizontal)` — which only responds to a
+/// trackpad's two-finger horizontal swipe or a Shift+wheel, leaving a plain
+/// vertical mouse wheel completely dead on a horizontal-only strip — a real
+/// NSScrollView with no vertical content automatically lets a plain wheel
+/// scroll it horizontally, the same way Finder and Photos filmstrips work.
+private struct HorizontalScroller<Content: View>: NSViewRepresentable {
+    @ViewBuilder let content: () -> Content
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.hasHorizontalScroller = true
+        scrollView.hasVerticalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.drawsBackground = false
+        scrollView.horizontalScrollElasticity = .allowed
+        scrollView.verticalScrollElasticity = .none
+
+        let hosting = NSHostingView(rootView: content())
+        hosting.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.documentView = hosting
+
+        // Pin top/bottom/leading and a fixed height to the clip view, but
+        // deliberately leave the trailing edge unconstrained — that's what
+        // lets the hosting view's width grow to its SwiftUI content's
+        // natural (ideal) width instead of being squeezed to the visible
+        // area, which is what actually makes there be something to scroll.
+        NSLayoutConstraint.activate([
+            hosting.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
+            hosting.bottomAnchor.constraint(equalTo: scrollView.contentView.bottomAnchor),
+            hosting.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
+            hosting.heightAnchor.constraint(equalTo: scrollView.contentView.heightAnchor)
+        ])
+
+        context.coordinator.hostingView = hosting
+        return scrollView
+    }
+
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        context.coordinator.hostingView?.rootView = content()
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator {
+        var hostingView: NSHostingView<Content>?
     }
 }

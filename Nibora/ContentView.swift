@@ -274,6 +274,8 @@ struct ContentView: View {
             } detail: {
                 if let selection {
                     EntryEditorView(entry: selection, vaultURL: vaultURL, allEntries: allEntriesForSwitcher, onNavigateToEntry: navigateToEntry(titled:))
+                } else if allEntriesForSwitcher.isEmpty {
+                    emptyVaultWelcome(vaultURL: vaultURL)
                 } else {
                     ContentUnavailableView("No Entry Selected", systemImage: "doc.text")
                 }
@@ -364,6 +366,36 @@ struct ContentView: View {
         guard !trimmed.isEmpty else { return }
         guard let match = allEntriesForSwitcher.first(where: { $0.title.localizedCaseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
         selection = match
+    }
+
+    /// Shown in the detail pane only while the vault has no entries at all
+    /// — the natural first-run moment, so it needs no "seen it" flag: it
+    /// disappears on its own once the first entry exists. Points a new user
+    /// at both the first action and the Guide, since the toolbar's icons
+    /// are unlabeled and the Guide button can land in overflow.
+    private func emptyVaultWelcome(vaultURL: URL) -> some View {
+        let isJournal = vaultManager.currentVaultType == .journal
+        return ContentUnavailableView {
+            Label("Welcome to Nibora", systemImage: "book.closed")
+        } description: {
+            Text(isJournal
+                 ? "Your vault is empty. Start with today's page, or take a minute with the Guide to see what Nibora can do."
+                 : "Your vault is empty. Create your first entry, or take a minute with the Guide to see what Nibora can do.")
+        } actions: {
+            Button(isJournal ? "Write Today's Entry" : "New Entry") {
+                if isJournal {
+                    let template = entryTemplatePreferences.isEnabled ? entryTemplatePreferences.defaultTemplate : nil
+                    createEntry(in: vaultURL, template: template)
+                } else {
+                    freeformNewEntryTitle = ""
+                    isFreeformNewEntryPresented = true
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            Button("Read the Guide") {
+                isHelpPresented = true
+            }
+        }
     }
 
     private func createEntry(in vaultURL: URL, template: EntryTemplate?) {

@@ -142,7 +142,7 @@ struct AttachmentsGalleryView: View {
                 .foregroundStyle(.secondary)
 
             HStack {
-                if let owner = AttachmentGalleryScanner.owningEntry(for: attachment, in: entries) {
+                if let owner = AttachmentGalleryScanner.owningEntry(for: attachment, in: entries, vaultURL: vaultURL) {
                     Button("Go to Entry") {
                         onSelectEntry(owner)
                         previewAttachment = nil

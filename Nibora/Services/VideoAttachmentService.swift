@@ -39,30 +39,6 @@ enum VideoAttachmentService {
         return SavedAttachment(relativeMarkdownPath: "Attachments/\(filename)", fileURL: fileURL)
     }
 
-    /// Trashes any attachment file that was referenced in `oldBody` but no
-    /// longer appears in `newBody` — same cleanup ImageAttachmentService
-    /// does for images, called alongside it on every save.
-    static func pruneRemovedVideos(oldBody: String, newBody: String, attachmentsFolder: URL) {
-        let removedFileNames = referencedFileNames(in: oldBody).subtracting(referencedFileNames(in: newBody))
-        guard !removedFileNames.isEmpty else { return }
-
-        for fileName in removedFileNames {
-            let fileURL = attachmentsFolder.appendingPathComponent(fileName)
-            try? FileManager.default.trashItem(at: fileURL, resultingItemURL: nil)
-        }
-    }
-
-    private static func referencedFileNames(in body: String) -> Set<String> {
-        let nsBody = body as NSString
-        let matches = MarkdownTextView.videoReferencePattern.matches(in: body, range: NSRange(location: 0, length: nsBody.length))
-        var names = Set<String>()
-        for match in matches {
-            let relativeRef = nsBody.substring(with: match.range(at: 2))
-            names.insert((relativeRef as NSString).lastPathComponent)
-        }
-        return names
-    }
-
     private static func sanitize(_ name: String?) -> String {
         let base = ((name ?? "video") as NSString).deletingPathExtension
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))

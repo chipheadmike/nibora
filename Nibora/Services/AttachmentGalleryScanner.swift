@@ -59,23 +59,21 @@ enum AttachmentGalleryScanner {
         }
     }
 
-    /// Finds the entry (if any) whose body references this attachment via
-    /// "![](Attachments/<filename>)" or "[label](Attachments/<filename>)".
-    /// Scoped to entries in the same folder, since attachment references
-    /// are always folder-relative (see EntryEditorView's attachmentsFolder
-    /// computation).
-    static func owningEntry(for attachment: GalleryAttachment, in entries: [JournalEntryRecord]) -> JournalEntryRecord? {
+    /// Finds the entry (if any) that references this attachment — via its
+    /// frontmatter attachment list or an older inline line. Scoped to
+    /// entries in the same folder, since attachment references are always
+    /// folder-relative (see EntryEditorView's attachmentsFolder
+    /// computation). Reads each candidate from disk rather than the cached
+    /// searchableBody, since the list lives in frontmatter, which the index
+    /// doesn't store.
+    static func owningEntry(for attachment: GalleryAttachment, in entries: [JournalEntryRecord], vaultURL: URL) -> JournalEntryRecord? {
         entries.first { entry in
             guard (entry.relativePath as NSString).deletingLastPathComponent == attachment.folderRelativePath else { return false }
-            let nsBody = entry.searchableBody as NSString
-            let fullRange = NSRange(location: 0, length: nsBody.length)
-
-            let imageMatches = MarkdownTextView.imageReferencePattern.matches(in: entry.searchableBody, range: fullRange)
-            if imageMatches.contains(where: { (nsBody.substring(with: $0.range(at: 1)) as NSString).lastPathComponent == attachment.fileName }) {
-                return true
-            }
-            let videoMatches = MarkdownTextView.videoReferencePattern.matches(in: entry.searchableBody, range: fullRange)
-            return videoMatches.contains { (nsBody.substring(with: $0.range(at: 2)) as NSString).lastPathComponent == attachment.fileName }
+            guard let contents = try? String(contentsOf: vaultURL.appendingPathComponent(entry.relativePath), encoding: .utf8) else { return false }
+            let parsed = MarkdownFrontmatterParser.parse(contents)
+            return AttachmentReferences
+                .fileNames(body: parsed.body, attachments: EntryFrontmatter.decodeAttachments(parsed.fields["attachments"]))
+                .contains(attachment.fileName)
         }
     }
 
