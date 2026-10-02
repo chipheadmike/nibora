@@ -6,12 +6,12 @@
 import Foundation
 
 /// Finds files under any Attachments/ folder, anywhere in the vault, that
-/// aren't referenced by any entry's `![](...)` image markdown or
-/// video-link markdown in that same folder — leftovers from deleted entries
-/// (in-editor removal is now handled immediately at save time by
-/// ImageAttachmentService.pruneRemovedImages / VideoAttachmentService.pruneRemovedVideos,
-/// so this mainly catches whole-entry deletions and anything edited outside
-/// the app). Reads bodies fresh from disk rather than the cached
+/// aren't referenced by any entry in that same folder — via its frontmatter
+/// attachment list or an older inline `![]()` / video-link line — leftovers
+/// from deleted entries (removing an attachment from an entry is handled
+/// immediately at save time by AttachmentReferences.pruneRemoved, so this
+/// mainly catches whole-entry deletions and anything edited outside the
+/// app). Reads bodies fresh from disk rather than the cached
 /// searchableBody, since this feeds a delete action and needs to reflect
 /// what's actually on disk right now. Recurses the whole tree rather than
 /// assuming Journal's one-level month-folder layout, so it also works
@@ -32,21 +32,14 @@ enum OrphanedAttachmentScanner {
         for entry in entries {
             let fileURL = vaultURL.appendingPathComponent(entry.relativePath)
             guard let contents = try? String(contentsOf: fileURL, encoding: .utf8) else { continue }
-            let body = MarkdownFrontmatterParser.parse(contents).body
-            let nsBody = body as NSString
+            let parsed = MarkdownFrontmatterParser.parse(contents)
             let folderRelativePath = (entry.relativePath as NSString).deletingLastPathComponent
-
-            let imageMatches = MarkdownTextView.imageReferencePattern.matches(in: body, range: NSRange(location: 0, length: nsBody.length))
-            for match in imageMatches {
-                let relativeRef = nsBody.substring(with: match.range(at: 1))
-                referencedFileNamesByFolder[folderRelativePath, default: []].insert((relativeRef as NSString).lastPathComponent)
-            }
-
-            let videoMatches = MarkdownTextView.videoReferencePattern.matches(in: body, range: NSRange(location: 0, length: nsBody.length))
-            for match in videoMatches {
-                let relativeRef = nsBody.substring(with: match.range(at: 2))
-                referencedFileNamesByFolder[folderRelativePath, default: []].insert((relativeRef as NSString).lastPathComponent)
-            }
+            referencedFileNamesByFolder[folderRelativePath, default: []].formUnion(
+                AttachmentReferences.fileNames(
+                    body: parsed.body,
+                    attachments: EntryFrontmatter.decodeAttachments(parsed.fields["attachments"])
+                )
+            )
         }
 
         var orphans: [OrphanedFile] = []

@@ -74,9 +74,9 @@ struct HelpView: View {
     - `[[Entry Title]]` to link directly to another entry by its exact title — Cmd+Click to jump there
     - `#tag` anywhere in a line — filterable from the sidebar
 
-    Drag or paste an image into an entry and it's saved into an Attachments folder alongside it and shown in the strip below the editor — click a thumbnail there for a bigger preview (its size is adjustable in Settings > Editor). Deleting the image from the text moves its file to the Trash too, automatically, the next time the entry saves.
+    Drag or paste photos and videos into an entry, or drop them straight onto the strip below the editor. They're saved into an Attachments folder alongside the entry and added to the strip — nothing is inserted into your text, so the entry stays clean. Click a photo for a bigger preview (its size is adjustable in Settings > Editor), or a video to open it in your default player. Right-click any item in the strip to **Reveal in Finder** or **Remove** it — Remove takes it out of the entry and moves its file to the Trash.
 
-    Video works the same way — drag or paste a video file in and it's saved alongside it as a plain link (e.g. `[🎬 clip.mov](...)`, left as visible text — video can't be inlined as an image the way `![]()` can) and shown as a poster-frame thumbnail in the strip. Click it (or Cmd+Click the link in the text) to open it in your default video player.
+    The list lives in the entry's hidden header (its frontmatter), not in the text. Entries from older versions may still have `![]()` lines in the text; those keep showing in the strip, and a **Move out of text** button appears there to tidy them away in one click (Version History can undo it).
 
     Entries are also indexed into macOS's system-wide Spotlight search (Cmd+Space) — search from anywhere on your Mac and clicking a result jumps straight into that entry, entirely on-device.
 

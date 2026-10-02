@@ -13,6 +13,11 @@ struct EntryFrontmatter: Equatable {
     var modifiedAt: Date
     var icon: String?
     var sortOrder: Int
+    /// Photos and videos attached to this entry, as paths relative to the
+    /// entry's own folder (e.g. "Attachments/20260102-0800-IMG_1.png"), in
+    /// the order they were added. Lives here in the hidden header rather
+    /// than as `![]()` lines in the body, so the text stays clean.
+    var attachments: [String] = []
 
     private static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -42,6 +47,26 @@ struct EntryFrontmatter: Equatable {
 
     static func timestamp(from string: String) -> Date? {
         timestampFormatter.date(from: string)
+    }
+
+    /// Paths are percent-encoded individually before being comma-joined, so
+    /// a filename containing a comma, space, parenthesis, colon or "#"
+    /// (possible for anything imported from elsewhere) can't break the
+    /// flat one-line `key: value` format the hand-rolled parser expects.
+    private static let attachmentAllowedCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~/"))
+
+    static func encodeAttachments(_ paths: [String]) -> String {
+        paths
+            .compactMap { $0.addingPercentEncoding(withAllowedCharacters: attachmentAllowedCharacters) }
+            .joined(separator: ",")
+    }
+
+    static func decodeAttachments(_ raw: String?) -> [String] {
+        guard let raw, !raw.isEmpty else { return [] }
+        return raw
+            .split(separator: ",")
+            .compactMap { String($0).removingPercentEncoding }
+            .filter { !$0.isEmpty }
     }
 
     /// Builds a frontmatter model from parsed raw fields, filling in defaults
@@ -77,6 +102,7 @@ struct EntryFrontmatter: Equatable {
         let sortOrder = fields["sortOrder"].flatMap(Int.init) ?? 0
         let title = fields["title"] ?? ""
         let icon = (fields["icon"]?.isEmpty == false) ? fields["icon"] : nil
+        let attachments = decodeAttachments(fields["attachments"])
 
         let frontmatter = EntryFrontmatter(
             id: id,
@@ -85,7 +111,8 @@ struct EntryFrontmatter: Equatable {
             createdAt: createdAt,
             modifiedAt: modifiedAt,
             icon: icon,
-            sortOrder: sortOrder
+            sortOrder: sortOrder,
+            attachments: attachments
         )
         return (frontmatter, healed)
     }
@@ -102,6 +129,9 @@ struct EntryFrontmatter: Equatable {
             fields.append(("icon", icon))
         }
         fields.append(("sortOrder", String(sortOrder)))
+        if !attachments.isEmpty {
+            fields.append(("attachments", Self.encodeAttachments(attachments)))
+        }
         return fields
     }
 }

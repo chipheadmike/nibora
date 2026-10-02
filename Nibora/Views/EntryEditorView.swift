@@ -27,6 +27,7 @@ struct EntryEditorView: View {
 
     @State private var title: String = ""
     @State private var bodyText: String = ""
+    @State private var attachments: [String] = []
     @State private var saveTask: Task<Void, Never>?
     @State private var isLoaded = false
     @State private var isFocusModeEnabled = false
@@ -89,6 +90,7 @@ struct EntryEditorView: View {
                     onVideoClick: openVideo
                 )
                 .onChange(of: bodyText) { scheduleSave() }
+                .onChange(of: attachments) { scheduleSave() }
 
                 if isPreviewEnabled {
                     Divider()
@@ -104,7 +106,14 @@ struct EntryEditorView: View {
             }
 
             if imageAttachmentPreferences.isStripVisible {
-                AttachmentsStripView(text: bodyText, baseDirectory: fileURL.deletingLastPathComponent())
+                AttachmentsStripView(
+                    text: bodyText,
+                    attachments: attachments,
+                    baseDirectory: fileURL.deletingLastPathComponent(),
+                    onRemove: removeAttachment,
+                    onMoveInlineOut: moveInlineAttachmentsOutOfText,
+                    onDrop: handleStripDrop
+                )
             }
 
             BacklinksView(entries: backlinkEntries) { linkedEntry in
@@ -185,9 +194,12 @@ struct EntryEditorView: View {
         isLoaded = false
         title = entry.title
         if let contents = try? String(contentsOf: fileURL, encoding: .utf8) {
-            bodyText = MarkdownFrontmatterParser.parse(contents).body
+            let parsed = MarkdownFrontmatterParser.parse(contents)
+            bodyText = parsed.body
+            attachments = EntryFrontmatter.decodeAttachments(parsed.fields["attachments"])
         } else {
             bodyText = ""
+            attachments = []
         }
         isLoaded = true
     }
@@ -213,8 +225,12 @@ struct EntryEditorView: View {
         EntryHistoryService.snapshotIfNeeded(fileURL: fileURL)
 
         // Read what's still on disk (pre-overwrite) so we can tell which
-        // image references, if any, were just removed from the text.
-        let oldBody = (try? String(contentsOf: fileURL, encoding: .utf8)).map { MarkdownFrontmatterParser.parse($0).body } ?? ""
+        // attachments, if any, were just removed from the entry.
+        let oldParsed = (try? String(contentsOf: fileURL, encoding: .utf8)).map { MarkdownFrontmatterParser.parse($0) }
+        let oldFileNames = AttachmentReferences.fileNames(
+            body: oldParsed?.body ?? "",
+            attachments: EntryFrontmatter.decodeAttachments(oldParsed?.fields["attachments"])
+        )
 
         let frontmatter = EntryFrontmatter(
             id: entry.id,
@@ -223,13 +239,16 @@ struct EntryEditorView: View {
             createdAt: entry.createdAt,
             modifiedAt: Date(),
             icon: entry.icon,
-            sortOrder: entry.sortOrder
+            sortOrder: entry.sortOrder,
+            attachments: attachments
         )
 
         try? EntryFileWriter.write(frontmatter: frontmatter, body: bodyText, to: fileURL)
-        let attachmentsFolder = fileURL.deletingLastPathComponent().appendingPathComponent("Attachments")
-        ImageAttachmentService.pruneRemovedImages(oldBody: oldBody, newBody: bodyText, attachmentsFolder: attachmentsFolder)
-        VideoAttachmentService.pruneRemovedVideos(oldBody: oldBody, newBody: bodyText, attachmentsFolder: attachmentsFolder)
+        AttachmentReferences.pruneRemoved(
+            oldFileNames: oldFileNames,
+            newFileNames: AttachmentReferences.fileNames(body: bodyText, attachments: attachments),
+            attachmentsFolder: fileURL.deletingLastPathComponent().appendingPathComponent("Attachments")
+        )
         // force: true — see the identical comment in SidebarView's
         // persistEntryFrontmatter; we just wrote this file ourselves.
         EntryIndexer(modelContext: modelContext).reindexSingleFile(at: fileURL, vaultURL: vaultURL, force: true)
@@ -258,14 +277,73 @@ struct EntryEditorView: View {
         EntryPDFExporter.export(title: title, body: bodyText, theme: themeManager, fontPreferences: fontPreferences, to: url)
     }
 
-    private func saveDroppedImage(_ image: NSImage, suggestedName: String?) -> String? {
-        let attachmentsFolder = fileURL.deletingLastPathComponent().appendingPathComponent("Attachments")
-        return try? ImageAttachmentService.saveImage(image, originalName: suggestedName, in: attachmentsFolder).relativeMarkdownPath
+    private func appendAttachment(_ relativePath: String) {
+        if !attachments.contains(relativePath) {
+            attachments.append(relativePath)
+        }
     }
 
-    private func saveDroppedVideo(_ sourceURL: URL) -> String? {
+    private func saveDroppedImage(_ image: NSImage, suggestedName: String?) {
         let attachmentsFolder = fileURL.deletingLastPathComponent().appendingPathComponent("Attachments")
-        return try? VideoAttachmentService.saveVideo(from: sourceURL, originalName: sourceURL.lastPathComponent, in: attachmentsFolder).relativeMarkdownPath
+        guard let saved = try? ImageAttachmentService.saveImage(image, originalName: suggestedName, in: attachmentsFolder) else { return }
+        appendAttachment(saved.relativeMarkdownPath)
+    }
+
+    private func saveDroppedVideo(_ sourceURL: URL) {
+        let attachmentsFolder = fileURL.deletingLastPathComponent().appendingPathComponent("Attachments")
+        guard let saved = try? VideoAttachmentService.saveVideo(from: sourceURL, originalName: sourceURL.lastPathComponent, in: attachmentsFolder) else { return }
+        appendAttachment(saved.relativeMarkdownPath)
+    }
+
+    /// Takes the attachment out of the entry. Its file goes to the Trash on
+    /// the next save, once nothing references it any more (see
+    /// AttachmentReferences.pruneRemoved). An older inline reference to the
+    /// same file is removed from the text too, or it would just reappear.
+    private func removeAttachment(_ relativePath: String) {
+        attachments.removeAll { $0 == relativePath }
+        bodyText = AttachmentReferences.removeInlineReferences(from: bodyText) { $0 == relativePath }
+    }
+
+    /// One-time cleanup for entries from before attachments moved out of the
+    /// text: adds every inline reference to the list and strips those lines
+    /// from the body. Nothing is trashed — the files stay referenced.
+    private func moveInlineAttachmentsOutOfText() {
+        for path in AttachmentReferences.inlinePaths(in: bodyText) {
+            appendAttachment(path)
+        }
+        bodyText = AttachmentReferences.removeAllInlineReferences(from: bodyText)
+    }
+
+    /// Files dropped directly onto the strip (the text view handles drops
+    /// onto the editor itself). Providers arrive as either a file URL
+    /// (Finder) or raw image data.
+    private func handleStripDrop(_ providers: [NSItemProvider]) -> Bool {
+        var accepted = false
+        for provider in providers {
+            if provider.canLoadObject(ofClass: URL.self) {
+                accepted = true
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                    guard let url else { return }
+                    Task { @MainActor in attachFile(at: url) }
+                }
+            } else if provider.canLoadObject(ofClass: NSImage.self) {
+                accepted = true
+                _ = provider.loadObject(ofClass: NSImage.self) { object, _ in
+                    guard let image = object as? NSImage else { return }
+                    Task { @MainActor in saveDroppedImage(image, suggestedName: nil) }
+                }
+            }
+        }
+        return accepted
+    }
+
+    private func attachFile(at url: URL) {
+        guard let type = UTType(filenameExtension: url.pathExtension) else { return }
+        if type.conforms(to: .movie) {
+            saveDroppedVideo(url)
+        } else if type.conforms(to: .image), let image = NSImage(contentsOf: url) {
+            saveDroppedImage(image, suggestedName: url.lastPathComponent)
+        }
     }
 
     /// Opens a Cmd+Clicked video reference with the user's default player

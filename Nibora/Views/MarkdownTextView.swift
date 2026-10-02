@@ -11,17 +11,20 @@ import UniformTypeIdentifiers
 /// always exactly what gets written to disk — headings are colored by level
 /// per the user's theme and bold/italic spans render with real font traits,
 /// but this is purely a display layer on top; no character is ever added,
-/// removed, or reflowed for styling. `![](...)` image references and
-/// video-link references (see videoReferencePattern) stay literal text;
-/// AttachmentsStripView (shown below this editor) handles previewing them.
+/// removed, or reflowed for styling. Dropped or pasted photos and videos
+/// never touch the text at all: they're handed to `saveImage`/`saveVideo`,
+/// which attach them to the entry (see AttachmentsStripView, shown below
+/// this editor). Inline `![]()` / video-link references from older entries
+/// are left as literal text.
 struct MarkdownTextView: NSViewRepresentable {
     @Binding var text: String
     let baseDirectory: URL
-    let saveImage: (NSImage, String?) -> String?
-    /// Saves a dropped/pasted video file into the entry's Attachments
-    /// folder, mirroring saveImage — returns the vault-relative markdown
-    /// path, or nil on failure.
-    let saveVideo: (URL) -> String?
+    /// Called with a dropped/pasted image (and its original filename, if it
+    /// had one). The owner saves it and attaches it to the entry; nothing
+    /// is inserted into the text.
+    let saveImage: (NSImage, String?) -> Void
+    /// Same for a dropped/pasted video file.
+    let saveVideo: (URL) -> Void
     let theme: ThemeManager
     let tagColorPreferences: TagColorPreferences
     let hotkeyPreferences: TimestampHotkeyPreferences
@@ -40,7 +43,7 @@ struct MarkdownTextView: NSViewRepresentable {
 
     static let imageReferencePattern = try! NSRegularExpression(pattern: #"!\[[^\]]*\]\(([^)]+)\)"#)
     /// A plain "[label](path)" markdown link whose path ends in a common
-    /// video extension — distinguishes a dropped/pasted video reference
+    /// video extension — distinguishes an older entry's inline video reference
     /// from a real "[text](url)" web link (applyLinks) sharing the exact
     /// same syntax, purely by what it points to. Kept separate from
     /// imageReferencePattern's "![]()" since video can't be inlined as an
@@ -844,13 +847,12 @@ struct MarkdownTextView: NSViewRepresentable {
 }
 
 /// NSTextView subclass that intercepts image/video drags/pastes (Finder or
-/// Photos) and routes them through `saveImage`/`saveVideo` so they land as
-/// real vault files — an image as a `![]()` reference, a video as a plain
-/// `[label](path)` link (see videoReferencePattern) — inserted as literal
-/// text.
+/// Photos) and routes them through `saveImage`/`saveVideo` so they become
+/// real vault files attached to the entry. Nothing is inserted into the
+/// text — the attachment strip below the editor is where they show up.
 final class DropHandlingTextView: NSTextView {
-    var saveImage: ((NSImage, String?) -> String?)?
-    var saveVideo: ((URL) -> String?)?
+    var saveImage: ((NSImage, String?) -> Void)?
+    var saveVideo: ((URL) -> Void)?
     var hotkeyPreferences: TimestampHotkeyPreferences?
     var isWeatherEligible = false
     var weatherPreferences: WeatherPreferences?
@@ -999,24 +1001,7 @@ final class DropHandlingTextView: NSTextView {
     }
 
     override func paste(_ sender: Any?) {
-        let pasteboard = NSPasteboard.general
-        if let saveImage, pasteboardContainsImage(pasteboard) {
-            if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
-               let imageURL = urls.first(where: { isImageFile($0) }),
-               let image = NSImage(contentsOf: imageURL) {
-                insertImageLink(image, suggestedName: imageURL.lastPathComponent, at: selectedRange().location, save: saveImage)
-                return
-            }
-            if let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
-               let image = images.first {
-                insertImageLink(image, suggestedName: nil, at: selectedRange().location, save: saveImage)
-                return
-            }
-        }
-        if let saveVideo, let videoURL = videoFileURL(in: pasteboard) {
-            insertVideoLink(videoURL, at: selectedRange().location, save: saveVideo)
-            return
-        }
+        if attachAll(from: NSPasteboard.general) { return }
         super.paste(sender)
     }
 
@@ -1028,52 +1013,48 @@ final class DropHandlingTextView: NSTextView {
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        let pasteboard = sender.draggingPasteboard
-        let dropPoint = convert(sender.draggingLocation, from: nil)
-        let insertionIndex = characterIndexForInsertion(at: dropPoint)
-
-        if pasteboardContainsImage(pasteboard), let saveImage {
-            if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
-               let imageURL = urls.first(where: { isImageFile($0) }),
-               let image = NSImage(contentsOf: imageURL) {
-                insertImageLink(image, suggestedName: imageURL.lastPathComponent, at: insertionIndex, save: saveImage)
-                return true
-            }
-
-            if let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
-               let image = images.first {
-                insertImageLink(image, suggestedName: nil, at: insertionIndex, save: saveImage)
-                return true
-            }
-        }
-
-        if let saveVideo, let videoURL = videoFileURL(in: pasteboard) {
-            insertVideoLink(videoURL, at: insertionIndex, save: saveVideo)
-            return true
-        }
+        if attachAll(from: sender.draggingPasteboard) { return true }
 
         return super.performDragOperation(sender)
     }
 
-    private func insertImageLink(_ image: NSImage, suggestedName: String?, at index: Int, save: (NSImage, String?) -> String?) {
-        guard let relativePath = save(image, suggestedName), let textStorage else { return }
-        let markdown = "![](\(relativePath))"
-        textStorage.replaceCharacters(in: NSRange(location: index, length: 0), with: markdown)
-        didChangeText()
-    }
+    /// Attaches every image and video found on `pasteboard`, not just the
+    /// first — a multi-file Finder drag/paste puts one NSURL per item on
+    /// the pasteboard, and the earlier `.first(where:)` version silently
+    /// discarded everything past the first match. Falls back to raw
+    /// NSImage data (every image on the pasteboard, not just the first
+    /// there either) only when no file URLs were found, since a Finder
+    /// drag that already resolved via URL can also carry a decoded-image
+    /// representation of those same files, which would double-attach them.
+    /// Returns whether anything was attached at all.
+    private func attachAll(from pasteboard: NSPasteboard) -> Bool {
+        var attachedSomething = false
 
-    /// Inserts a plain "[🎬 name.mov](Attachments/...)" link — deliberately
-    /// not `![]()` (that syntax means "renderable image," which a video
-    /// isn't) and deliberately not hidden/thumbnail-ified inline (see this
-    /// file's top doc comment on why in-editor rendering tricks are
-    /// avoided). AttachmentsStripView shows a real poster-frame thumbnail
-    /// below the editor instead; Cmd+Click on this link also opens the file,
-    /// via applyVideoLink's private-scheme routing.
-    private func insertVideoLink(_ fileURL: URL, at index: Int, save: (URL) -> String?) {
-        guard let relativePath = save(fileURL), let textStorage else { return }
-        let markdown = "[🎬 \(fileURL.lastPathComponent)](\(relativePath))"
-        textStorage.replaceCharacters(in: NSRange(location: index, length: 0), with: markdown)
-        didChangeText()
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
+            if let saveImage {
+                for url in urls where isImageFile(url) {
+                    guard let image = NSImage(contentsOf: url) else { continue }
+                    saveImage(image, url.lastPathComponent)
+                    attachedSomething = true
+                }
+            }
+            if let saveVideo {
+                for url in urls where isVideoFile(url) {
+                    saveVideo(url)
+                    attachedSomething = true
+                }
+            }
+        }
+
+        if !attachedSomething, let saveImage,
+           let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage] {
+            for image in images {
+                saveImage(image, nil)
+                attachedSomething = true
+            }
+        }
+
+        return attachedSomething
     }
 
     private func pasteboardContainsImage(_ pasteboard: NSPasteboard) -> Bool {

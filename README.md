@@ -60,10 +60,24 @@ SwiftData is used only as a fast index over those files. It can be rebuilt at an
 2. Under **Signing & Capabilities**, select your own development team and change the bundle identifier — the project is currently configured with the author's.
 3. Build and run the `Nibora` scheme.
 
+## Distribution
+
+Nibora isn't on the App Store — it's distributed as a notarized `.dmg` directly. `Scripts/release.sh` builds a Release archive, signs it with a Developer ID Application certificate, submits it to Apple for notarization, staples the ticket, and packages the notarized, stapled result as `build/release/Nibora-<version>.dmg`.
+
+To run it yourself, you need:
+1. A **Developer ID Application** certificate for your team, installed in your keychain (Xcode > Settings > Accounts > Manage Certificates > + > Developer ID Application). This is a different certificate type from the one used for App Store builds or local development.
+2. Notarization credentials stored under a keychain profile, using an **app-specific password** from [appleid.apple.com](https://appleid.apple.com) — not your regular Apple ID password:
+   ```
+   xcrun notarytool store-credentials "nibora-notarize" --apple-id "you@example.com" --team-id YOUR_TEAM_ID
+   ```
+3. `Scripts/release.sh` and `Scripts/ExportOptions.plist` updated with your own team ID and Developer ID identity string — they're currently set to the project author's.
+
+Two things worth knowing if you're adapting this for your own fork: a `.dmg` built with `hdiutil` isn't signed by default, and a notarization ticket only staples onto the exact file that was submitted — so the script signs and separately notarizes the `.dmg` itself, on top of notarizing the `.app` inside it. Skipping either step passes locally but fails Gatekeeper's actual check on a clean Mac.
+
 ## Design notes for contributors
 
 - The editor is a plain-text `NSTextView` whose backing string is always exactly what's written to disk. Styling is attribute-only — no character is ever added, removed, or hidden for display.
-- As a consequence, photo and video references (`![](…)` and `[🎬 clip.mov](…)`) stay visible as text in the editor, and thumbnails live in a separate SwiftUI strip below it. Rendering images inline inside the text view was tried twice and abandoned as unreliable on this SDK; please don't restart that without reading the comments in `MarkdownTextView.swift` and `AttachmentsStripView.swift`.
+- As a consequence, attached photos and videos never appear in the text at all: an entry's attachment list lives in its frontmatter (`attachments:`) and is shown in a separate SwiftUI strip below the editor. Rendering images inline inside the text view was tried twice and abandoned as unreliable on this SDK; please don't restart that without reading the comments in `MarkdownTextView.swift` and `AttachmentsStripView.swift`. (Older entries may still have inline `![](…)` lines, which the strip also reads — see `AttachmentReferences.swift`.)
 - Clickable spans inside the editor (task checkboxes, wikilinks, video links) use private URL schemes routed through the text view's native Cmd+Click link handling, the one interaction that has proven reliable.
 
 ## Tests
