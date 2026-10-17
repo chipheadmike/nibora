@@ -204,6 +204,7 @@ struct MarkdownTextView: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let textView = DropHandlingTextView()
         textView.delegate = context.coordinator
+        textView.textStorage?.delegate = context.coordinator
         textView.isEditable = true
         textView.isRichText = false
         textView.font = EditorFontSet(fontName: fontPreferences.fontName, fontSize: fontPreferences.fontSize).regular
@@ -265,7 +266,7 @@ struct MarkdownTextView: NSViewRepresentable {
         Coordinator(text: $text, theme: theme, tagColorPreferences: tagColorPreferences, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, onWikilinkClick: onWikilinkClick, onVideoClick: onVideoClick)
     }
 
-    final class Coordinator: NSObject, NSTextViewDelegate {
+    final class Coordinator: NSObject, NSTextViewDelegate, NSTextStorageDelegate {
         var text: Binding<String>
         var theme: ThemeManager
         var tagColorPreferences: TagColorPreferences
@@ -292,8 +293,24 @@ struct MarkdownTextView: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? DropHandlingTextView else { return }
             text.wrappedValue = textView.string
-            MarkdownTextView.applyMarkdownStyling(in: textView, theme: theme, fontPreferences: fontPreferences, isFocusModeEnabled: isFocusModeEnabled, colorScheme: colorScheme, tagColorPreferences: tagColorPreferences)
             textView.checkForLinkBracketClosure()
+        }
+
+        /// Restyles just the edited line(s) on every keystroke, instead of
+        /// textDidChange re-running the whole regex cascade over the entire
+        /// document — that was the actual cause of typing feeling laggy in
+        /// anything longer than a few lines. NSTextStorageDelegate (rather
+        /// than NSTextViewDelegate.textDidChange) is the standard TextKit
+        /// hook for this: it's the only place that's handed the exact
+        /// edited range at the moment of the edit. Changing attributes from
+        /// inside this method (as applyIncrementalStyling does) is the
+        /// documented, sanctioned pattern for live syntax highlighting —
+        /// TextKit folds those nested begin/endEditing calls into the
+        /// outer edit already in progress rather than re-dispatching, so
+        /// this doesn't recurse.
+        func textStorage(_ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorageEditActions, range editedRange: NSRange, changeInLength delta: Int) {
+            guard editedMask.contains(.editedCharacters) else { return }
+            MarkdownTextView.applyIncrementalStyling(in: textStorage, editedRange: editedRange, theme: theme, fontPreferences: fontPreferences, colorScheme: colorScheme, tagColorPreferences: tagColorPreferences)
         }
 
         /// Re-dims/un-dims paragraphs as the cursor moves, independent of any
@@ -451,17 +468,77 @@ struct MarkdownTextView: NSViewRepresentable {
         guard fullRange.length > 0 else { return }
 
         textStorage.beginEditing()
-        textStorage.addAttribute(.foregroundColor, value: NSColor(resolvedTheme.bodyColor), range: fullRange)
-        textStorage.addAttribute(.font, value: fonts.regular, range: fullRange)
+        applyLineStyling(in: textStorage, fullText: fullText, range: fullRange, theme: resolvedTheme, fonts: fonts)
+
+        // Applied after all other styling so it uniformly mutes everything
+        // outside the focused paragraph regardless of its normal color
+        // (heading, link, code, etc.) — a flat dim rather than per-element.
+        if isFocusModeEnabled {
+            let focusedRange = focusedParagraphRange(in: textView)
+            let dimColor = NSColor(resolvedTheme.bodyColor).withAlphaComponent(0.25)
+            if focusedRange.location > fullRange.location {
+                textStorage.addAttribute(.foregroundColor, value: dimColor, range: NSRange(location: fullRange.location, length: focusedRange.location - fullRange.location))
+            }
+            let afterFocusedStart = focusedRange.location + focusedRange.length
+            let fullEnd = fullRange.location + fullRange.length
+            if afterFocusedStart < fullEnd {
+                textStorage.addAttribute(.foregroundColor, value: dimColor, range: NSRange(location: afterFocusedStart, length: fullEnd - afterFocusedStart))
+            }
+        }
+
+        textStorage.endEditing()
+    }
+
+    /// Restyles only the line(s) touched by a single edit — driven by
+    /// Coordinator.textStorage(_:didProcessEditing:range:changeInLength:)
+    /// on every keystroke/paste/programmatic edit, so typing in a long
+    /// entry no longer re-runs every regex pass over the whole document
+    /// each time. Deliberately skips focus-mode dimming, which stays a
+    /// full-document concern recomputed from
+    /// Coordinator.textViewDidChangeSelection instead (cursor movement —
+    /// including the movement typing itself causes — already fires that
+    /// separately, so dimming still stays correct while typing).
+    static func applyIncrementalStyling(in textStorage: NSTextStorage, editedRange: NSRange, theme: ThemeManager, fontPreferences: FontPreferences, colorScheme: ColorScheme, tagColorPreferences: TagColorPreferences? = nil) {
+        let fullText = textStorage.string as NSString
+        guard fullText.length > 0 else { return }
+
+        // Clamp first — editedRange can point just past the end of a
+        // deletion that removed the last character(s) on a line.
+        let clampedLocation = min(editedRange.location, fullText.length)
+        let clampedLength = min(editedRange.length, fullText.length - clampedLocation)
+
+        // Grow to whole lines: every pattern below is line-scoped (none
+        // reads across a line boundary), so this is exactly enough context
+        // for a correct restyle of a multi-line paste too, never more.
+        let scopedRange = fullText.lineRange(for: NSRange(location: clampedLocation, length: clampedLength))
+        guard scopedRange.length > 0 else { return }
+
+        let resolvedTheme = ResolvedTheme(theme, for: colorScheme, tagColorPreferences: tagColorPreferences)
+        let fonts = EditorFontSet(fontName: fontPreferences.fontName, fontSize: fontPreferences.fontSize, codeFontName: fontPreferences.codeFontName)
+
+        textStorage.beginEditing()
+        applyLineStyling(in: textStorage, fullText: fullText, range: scopedRange, theme: resolvedTheme, fonts: fonts)
+        textStorage.endEditing()
+    }
+
+    /// The actual styling pass, shared by the full-document and incremental
+    /// entry points above — resets color/font/strikethrough across exactly
+    /// `range`, then runs every per-line pass only over the lines within
+    /// it. Every pass already took a `lineRange` parameter and matched only
+    /// within it, so narrowing `range` here is the whole optimization —
+    /// nothing below needed to change to make the incremental path correct.
+    private static func applyLineStyling(in textStorage: NSTextStorage, fullText: NSString, range: NSRange, theme resolvedTheme: ResolvedTheme, fonts: EditorFontSet) {
+        textStorage.addAttribute(.foregroundColor, value: NSColor(resolvedTheme.bodyColor), range: range)
+        textStorage.addAttribute(.font, value: fonts.regular, range: range)
         // Unlike color/font above, nothing else guarantees a fresh strikethrough
         // is fully cleared before this pass reapplies it — e.g. unchecking a
         // task list item edits only its "[x]"/"[ ]" character, leaving the
         // content's previously-applied strikethroughStyle attribute untouched
         // (this same reset is skipped for ~~text~~ since editing that always
         // touches/removes the delimiter characters the attribute was applied to).
-        textStorage.removeAttribute(.strikethroughStyle, range: fullRange)
+        textStorage.removeAttribute(.strikethroughStyle, range: range)
 
-        fullText.enumerateSubstrings(in: fullRange, options: [.byLines]) { _, lineRange, _, _ in
+        fullText.enumerateSubstrings(in: range, options: [.byLines]) { _, lineRange, _, _ in
             let line = fullText.substring(with: lineRange)
             if let level = headingLevel(of: line) {
                 textStorage.addAttribute(.foregroundColor, value: NSColor(resolvedTheme.color(forHeadingLevel: level)), range: lineRange)
@@ -487,24 +564,6 @@ struct MarkdownTextView: NSViewRepresentable {
             applyStrikethrough(in: textStorage, line: line, lineRange: lineRange, theme: resolvedTheme)
             applyHighlight(in: textStorage, line: line, lineRange: lineRange, theme: resolvedTheme)
         }
-
-        // Applied after all other styling so it uniformly mutes everything
-        // outside the focused paragraph regardless of its normal color
-        // (heading, link, code, etc.) — a flat dim rather than per-element.
-        if isFocusModeEnabled {
-            let focusedRange = focusedParagraphRange(in: textView)
-            let dimColor = NSColor(resolvedTheme.bodyColor).withAlphaComponent(0.25)
-            if focusedRange.location > fullRange.location {
-                textStorage.addAttribute(.foregroundColor, value: dimColor, range: NSRange(location: fullRange.location, length: focusedRange.location - fullRange.location))
-            }
-            let afterFocusedStart = focusedRange.location + focusedRange.length
-            let fullEnd = fullRange.location + fullRange.length
-            if afterFocusedStart < fullEnd {
-                textStorage.addAttribute(.foregroundColor, value: dimColor, range: NSRange(location: afterFocusedStart, length: fullEnd - afterFocusedStart))
-            }
-        }
-
-        textStorage.endEditing()
     }
 
     /// The contiguous run of non-blank lines surrounding the cursor — a
