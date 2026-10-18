@@ -283,16 +283,27 @@ struct EntryEditorView: View {
         }
     }
 
+    /// The resize + JPEG/PNG encode + disk write (ImageAttachmentService)
+    /// used to run synchronously on the main thread during the drop event
+    /// itself — fine for one photo, visibly blocking for several at once
+    /// (now that a drop can attach more than one file). Dispatched to a
+    /// background task so the drop returns immediately and each thumbnail
+    /// pops into the strip as its own save finishes, instead of the whole
+    /// drop freezing until every file is done.
     private func saveDroppedImage(_ image: NSImage, suggestedName: String?) {
         let attachmentsFolder = fileURL.deletingLastPathComponent().appendingPathComponent("Attachments")
-        guard let saved = try? ImageAttachmentService.saveImage(image, originalName: suggestedName, in: attachmentsFolder) else { return }
-        appendAttachment(saved.relativeMarkdownPath)
+        Task.detached(priority: .userInitiated) {
+            guard let saved = try? ImageAttachmentService.saveImage(image, originalName: suggestedName, in: attachmentsFolder) else { return }
+            await appendAttachment(saved.relativeMarkdownPath)
+        }
     }
 
     private func saveDroppedVideo(_ sourceURL: URL) {
         let attachmentsFolder = fileURL.deletingLastPathComponent().appendingPathComponent("Attachments")
-        guard let saved = try? VideoAttachmentService.saveVideo(from: sourceURL, originalName: sourceURL.lastPathComponent, in: attachmentsFolder) else { return }
-        appendAttachment(saved.relativeMarkdownPath)
+        Task.detached(priority: .userInitiated) {
+            guard let saved = try? VideoAttachmentService.saveVideo(from: sourceURL, originalName: sourceURL.lastPathComponent, in: attachmentsFolder) else { return }
+            await appendAttachment(saved.relativeMarkdownPath)
+        }
     }
 
     /// Takes the attachment out of the entry. Its file goes to the Trash on
