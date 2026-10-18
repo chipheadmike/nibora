@@ -28,6 +28,7 @@ struct AttachmentsStripView: View {
 
     @Environment(ImageAttachmentPreferences.self) private var imageAttachmentPreferences
     @State private var previewPath: String?
+    @State private var imageThumbnails: [String: NSImage] = [:]
     @State private var videoPosterFrames: [String: NSImage] = [:]
 
     private var inlineOnlyPaths: [String] {
@@ -96,31 +97,42 @@ struct AttachmentsStripView: View {
         .help("Remove these photo/video lines from the entry's text. They stay in the strip.")
     }
 
+    /// The grid tile shows a small cached, downsampled thumbnail — loading
+    /// and decoding the full attachment on every render (as this used to
+    /// do unconditionally) is what made the strip sluggish after a drop.
+    /// The full-resolution image is only ever loaded on demand, inside the
+    /// popover, once the user actually clicks to enlarge one.
     @ViewBuilder
     private func imageThumbnail(for relativePath: String) -> some View {
         let fileURL = baseDirectory.appendingPathComponent(relativePath)
-        if let nsImage = NSImage(contentsOf: fileURL) {
-            Button {
-                previewPath = relativePath
-            } label: {
-                Image(nsImage: nsImage)
+        Button {
+            previewPath = relativePath
+        } label: {
+            if let thumbnail = imageThumbnails[relativePath] {
+                Image(nsImage: thumbnail)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 80, height: 80)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
+            } else {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.secondary.opacity(0.15))
+                    .frame(width: 80, height: 80)
+                    .overlay(Image(systemName: "photo").foregroundStyle(.secondary))
             }
-            .buttonStyle(.plain)
-            .popover(isPresented: Binding(
-                get: { previewPath == relativePath },
-                set: { isPresented in if !isPresented { previewPath = nil } }
-            )) {
-                previewContent(for: nsImage)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: Binding(
+            get: { previewPath == relativePath },
+            set: { isPresented in if !isPresented { previewPath = nil } }
+        )) {
+            if let fullImage = NSImage(contentsOf: fileURL) {
+                previewContent(for: fullImage)
             }
-        } else {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.secondary.opacity(0.15))
-                .frame(width: 80, height: 80)
-                .overlay(Image(systemName: "photo").foregroundStyle(.secondary))
+        }
+        .task(id: relativePath) {
+            guard imageThumbnails[relativePath] == nil else { return }
+            imageThumbnails[relativePath] = await ImageThumbnailService.thumbnail(for: fileURL)
         }
     }
 
