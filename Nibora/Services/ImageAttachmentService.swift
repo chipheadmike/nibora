@@ -56,24 +56,58 @@ enum ImageAttachmentService {
         }
     }
 
+    /// Pixel-exact resize via a plain CGContext bitmap — deliberately not
+    /// NSImage.lockFocus(), whose backing store silently renders at the
+    /// *current screen's* Retina scale factor (2x on effectively every
+    /// modern Mac) regardless of the target NSImage's nominal "size." That
+    /// meant every attachment this app ever saved came out at roughly
+    /// double the intended linear dimension — ~4x the pixel area of
+    /// maxLongEdge, not maxLongEdge itself — independent of the source
+    /// image's own characteristics (confirmed with a source built with no
+    /// lockFocus involvement at all). A CGContext created with explicit
+    /// pixel dimensions has no such ambiguity: what you ask for is exactly
+    /// what you get, on every Mac.
     private static func resize(_ image: NSImage, maxLongEdge: CGFloat) -> NSImage {
-        let size = image.size
-        let longEdge = max(size.width, size.height)
+        guard let tiffData = image.tiffRepresentation,
+              let sourceBitmap = NSBitmapImageRep(data: tiffData),
+              let sourceCGImage = sourceBitmap.cgImage else {
+            return image
+        }
+
+        let pixelWidth = sourceCGImage.width
+        let pixelHeight = sourceCGImage.height
+        let longEdge = CGFloat(max(pixelWidth, pixelHeight))
         guard longEdge > maxLongEdge, longEdge > 0 else { return image }
 
         let scale = maxLongEdge / longEdge
-        let newSize = NSSize(width: size.width * scale, height: size.height * scale)
+        let targetWidth = max(1, Int((CGFloat(pixelWidth) * scale).rounded()))
+        let targetHeight = max(1, Int((CGFloat(pixelHeight) * scale).rounded()))
 
-        let resized = NSImage(size: newSize)
-        resized.lockFocus()
-        image.draw(
-            in: NSRect(origin: .zero, size: newSize),
-            from: NSRect(origin: .zero, size: size),
-            operation: .copy,
-            fraction: 1.0
-        )
-        resized.unlockFocus()
-        return resized
+        // Preserve the source's actual alpha-channel presence — encode()
+        // below decides JPEG vs. PNG based on hasAlpha, and a context that
+        // always allocates an alpha channel (even for an opaque photo)
+        // would make every resized image report hasAlpha and silently
+        // force every one of them — the exact ones large enough to need
+        // resizing — onto PNG, which is dramatically larger than JPEG for
+        // photographic content.
+        let bitmapInfo: CGImageAlphaInfo = sourceBitmap.hasAlpha ? .premultipliedLast : .noneSkipLast
+        guard let context = CGContext(
+            data: nil,
+            width: targetWidth,
+            height: targetHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: bitmapInfo.rawValue
+        ) else {
+            return image
+        }
+
+        context.interpolationQuality = .high
+        context.draw(sourceCGImage, in: CGRect(x: 0, y: 0, width: targetWidth, height: targetHeight))
+
+        guard let resizedCGImage = context.makeImage() else { return image }
+        return NSImage(cgImage: resizedCGImage, size: NSSize(width: targetWidth, height: targetHeight))
     }
 
     private static func sanitize(_ name: String?) -> String {

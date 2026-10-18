@@ -17,7 +17,9 @@ struct AttachmentsGalleryView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var attachments: [GalleryAttachment] = []
+    @State private var isScanning = true
     @State private var previewAttachment: GalleryAttachment?
+    @State private var imageThumbnails: [URL: NSImage] = [:]
     @State private var videoPosterFrames: [URL: NSImage] = [:]
 
     private let columns = [GridItem(.adaptive(minimum: 110), spacing: 8)]
@@ -35,7 +37,10 @@ struct AttachmentsGalleryView: View {
 
             Divider()
 
-            if attachments.isEmpty {
+            if isScanning {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if attachments.isEmpty {
                 ContentUnavailableView(
                     "No Attachments",
                     systemImage: "photo.on.rectangle.angled",
@@ -54,8 +59,13 @@ struct AttachmentsGalleryView: View {
             }
         }
         .frame(width: 640, height: 520)
-        .onAppear {
-            attachments = AttachmentGalleryScanner.scan(vaultURL: vaultURL)
+        .task {
+            // Off the main thread: a vault-wide recursive folder walk was
+            // blocking the window from even appearing until it finished.
+            attachments = await Task.detached(priority: .userInitiated) {
+                AttachmentGalleryScanner.scan(vaultURL: vaultURL)
+            }.value
+            isScanning = false
         }
         .popover(item: $previewAttachment) { attachment in
             previewContent(for: attachment)
@@ -66,19 +76,23 @@ struct AttachmentsGalleryView: View {
     private func thumbnail(for attachment: GalleryAttachment) -> some View {
         switch attachment.kind {
         case .image:
-            if let image = NSImage(contentsOf: attachment.url) {
-                Button {
-                    previewAttachment = attachment
-                } label: {
-                    Image(nsImage: image)
+            Button {
+                previewAttachment = attachment
+            } label: {
+                if let thumbnail = imageThumbnails[attachment.url] {
+                    Image(nsImage: thumbnail)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 110, height: 110)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
+                } else {
+                    placeholderTile(systemImage: "photo")
                 }
-                .buttonStyle(.plain)
-            } else {
-                placeholderTile(systemImage: "photo")
+            }
+            .buttonStyle(.plain)
+            .task(id: attachment.url) {
+                guard imageThumbnails[attachment.url] == nil else { return }
+                imageThumbnails[attachment.url] = await ImageThumbnailService.thumbnail(for: attachment.url, maxDimension: 220)
             }
         case .video:
             Button {
